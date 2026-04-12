@@ -5,6 +5,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import Chatbot from "./components/Chatbot";
 
 // Public
 import Landing from "./pages/public/Landing";
@@ -117,6 +118,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <Chatbot />
       </BrowserRouter>
     </AuthProvider>
   );

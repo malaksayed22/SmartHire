@@ -1,0 +1,60 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "SmartHire: Install & Dev",
+      "type": "shell",
+      "command": "npm install; npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "new", "focus": true }
+    },
+    {
+      "label": "SmartHire: npm install only",
+      "type": "shell",
+      "command": "npm install",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": false,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "new", "focus": true }
+    },
+    {
+      "label": "SmartHire: Serve dist (Node)",
+      "type": "shell",
+      "command": "node serve.js",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "new", "focus": true }
+    },
+    {
+      "label": "SmartHire: Serve dist (Python)",
+      "type": "shell",
+      "command": "python server.py",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "new", "focus": true }
+    },
+    {
+      "label": "SmartHire: Diagnostic",
+      "type": "shell",
+      "command": "echo 'test' > task-ran.txt; node -e \"require('fs').writeFileSync('node-ran.txt', process.version)\"",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": false,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "new", "focus": true }
+    }
+  ]
+}

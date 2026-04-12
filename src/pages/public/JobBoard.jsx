@@ -30,7 +30,7 @@ export default function JobBoard() {
         <div style={{ padding: '48px 52px 36px', borderBottom: '1px solid var(--b1)', background: 'linear-gradient(180deg, rgba(91,142,248,0.04) 0%, transparent 100%)' }}>
           <div className="section-eyebrow"><div className="eyebrow-dot" />Open Positions</div>
           <h1 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 'clamp(36px,5vw,56px)', fontWeight: 400, letterSpacing: '-1.5px', lineHeight: 1.1, marginBottom: 16 }}>
-            Find your next<br /><span style={{ fontStyle: 'italic', background: 'var(--grad-text)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>great role.</span>
+            Find your next<br /><span style={{ fontStyle: 'italic', background: 'var(--grad-text)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'inline-block', paddingLeft: 4 }}>great role.</span>
           </h1>
           <p style={{ color: 'var(--m1)', fontSize: 16, fontWeight: 300 }}>
             {JOBS.length} open positions · AI-assisted matching · Instant application

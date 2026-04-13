@@ -6,15 +6,25 @@ export default function CandidateLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const { loginCandidate } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async () => {
-    if (!email || !password) return;
+    if (!email || !password) {
+      setError("Please fill in all fields.");
+      return;
+    }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 900));
-    loginCandidate(email, password);
-    navigate("/candidate/portal");
+    setError("");
+    try {
+      await loginCandidate(email, password);
+      navigate("/candidate/portal");
+    } catch (err) {
+      setError(err.message || "Login failed. Check your credentials.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -125,7 +135,7 @@ export default function CandidateLogin() {
               color: "var(--teal)",
             }}
           >
-            Demo: use any email + password to sign in
+            Sign in with your candidate account
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -169,6 +179,20 @@ export default function CandidateLogin() {
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
               />
             </div>
+
+            {error && (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "var(--red)",
+                  background: "var(--red-dim)",
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                }}
+              >
+                {error}
+              </div>
+            )}
 
             <button
               className="btn btn-primary"

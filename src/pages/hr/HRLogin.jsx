@@ -17,9 +17,14 @@ export default function HRLogin() {
     }
     setLoading(true);
     setError("");
-    await new Promise((r) => setTimeout(r, 1000));
-    loginHR(email, password);
-    navigate("/hr/dashboard");
+    try {
+      await loginHR(email, password);
+      navigate("/hr/dashboard");
+    } catch (err) {
+      setError(err.message || "Login failed. Check your credentials.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -133,7 +138,7 @@ export default function HRLogin() {
               color: "#8AB8FF",
             }}
           >
-            Demo: use any email + password to sign in
+            Sign in with your registered HR account
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

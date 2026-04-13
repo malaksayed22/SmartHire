@@ -28,44 +28,84 @@ export function AuthProvider({ children }) {
     );
   };
 
-  const loginHR = (email, password, name) => {
-    const n = name && name.trim() ? name.trim() : deriveNameFromEmail(email);
-    const initials = n
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase();
-    const user = { email, name: n, role: "HR Manager", avatar: initials };
-    setHrUser(user);
-    localStorage.setItem("sh_hr_user", JSON.stringify(user));
-    return true;
+  const loginHR = async (email, password, name) => {
+    try {
+      const { hrLogin } = await import("../services/api");
+      const data = await hrLogin(email, password);
+      const n = data.name || name || deriveNameFromEmail(email);
+      const initials = n
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase();
+      const user = {
+        email: data.email || email,
+        name: n,
+        role: "HR Manager",
+        avatar: initials,
+        _id: data._id || data.id,
+      };
+      setHrUser(user);
+      localStorage.setItem("sh_hr_user", JSON.stringify(user));
+      return true;
+    } catch (err) {
+      throw err;
+    }
   };
 
-  const loginCandidate = (email, password, name) => {
-    const n = name && name.trim() ? name.trim() : deriveNameFromEmail(email);
-    const initials = n
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase();
-    const user = { email, name: n, role: "candidate", avatar: initials };
-    setCandidateUser(user);
-    localStorage.setItem("sh_cand_user", JSON.stringify(user));
-    return true;
+  const loginCandidate = async (email, password, name) => {
+    try {
+      const { candidateLogin } = await import("../services/api");
+      const data = await candidateLogin(email, password);
+      const n = data.name || name || deriveNameFromEmail(email);
+      const initials = n
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase();
+      const user = {
+        email: data.email || email,
+        name: n,
+        role: "candidate",
+        avatar: initials,
+        _id: data._id || data.id,
+      };
+      setCandidateUser(user);
+      localStorage.setItem("sh_cand_user", JSON.stringify(user));
+      return true;
+    } catch (err) {
+      throw err;
+    }
   };
 
-  const signupHR = (name, email, password) => loginHR(email, password, name);
-  const signupCandidate = (name, email, password) =>
-    loginCandidate(email, password, name);
+  const signupHR = async (name, email, phone, password) => {
+    const { hrRegister } = await import("../services/api");
+    await hrRegister(name, email, phone, password);
+    return loginHR(email, password, name);
+  };
 
-  const logoutHR = () => {
+  const signupCandidate = async (name, email, phone, password) => {
+    const { candidateRegister } = await import("../services/api");
+    await candidateRegister(name, email, phone, password);
+    return loginCandidate(email, password, name);
+  };
+
+  const logoutHR = async () => {
+    try {
+      const { hrLogout } = await import("../services/api");
+      await hrLogout();
+    } catch {}
     setHrUser(null);
     localStorage.removeItem("sh_hr_user");
   };
 
-  const logoutCandidate = () => {
+  const logoutCandidate = async () => {
+    try {
+      const { candidateLogout } = await import("../services/api");
+      await candidateLogout();
+    } catch {}
     setCandidateUser(null);
     localStorage.removeItem("sh_cand_user");
   };

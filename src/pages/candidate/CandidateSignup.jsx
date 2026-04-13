@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 export default function CandidateSignup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
@@ -13,7 +14,7 @@ export default function CandidateSignup() {
   const navigate = useNavigate();
 
   const handleSignup = async () => {
-    if (!name || !email || !password || !confirm) {
+    if (!name || !email || !phone || !password || !confirm) {
       setError("Please fill in all fields.");
       return;
     }
@@ -23,9 +24,14 @@ export default function CandidateSignup() {
     }
     setLoading(true);
     setError("");
-    await new Promise((r) => setTimeout(r, 900));
-    signupCandidate(name, email, password);
-    navigate("/candidate/portal");
+    try {
+      await signupCandidate(name, email, phone, password);
+      navigate("/candidate/portal");
+    } catch (err) {
+      setError(err.message || "Registration failed. Try a different email.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -146,6 +152,17 @@ export default function CandidateSignup() {
                 placeholder="you@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSignup()}
+              />
+            </div>
+            <div>
+              <label className="label">Phone</label>
+              <input
+                className="input"
+                type="tel"
+                placeholder="+20 100 000 0000"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSignup()}
               />
             </div>

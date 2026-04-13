@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { CANDIDATES } from "../../data/mock";
 
 const PIPELINE = ["new", "reviewing", "shortlisted", "interview", "hired"];
 const PIPELINE_LABELS = {
@@ -30,10 +29,28 @@ export default function CandidatePortal() {
   const { candidateUser, logoutCandidate } = useAuth();
   const navigate = useNavigate();
 
-  // Show Sara Ahmed's applications as demo
-  const myApplications = CANDIDATES.filter(
-    (c) => c.email === "sara.ahmed@email.com" || c.id === "c1" || c.id === "c5",
-  ).slice(0, 2);
+  const [myApplications, setMyApplications] = useState([]);
+  const [loadingApps, setLoadingApps] = useState(true);
+  const [appsError, setAppsError] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim() || "/api";
+        const res = await fetch(`${BASE_URL}/candidate/my-applications`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error(`Failed to load applications (${res.status})`);
+        const data = await res.json();
+        setMyApplications(Array.isArray(data) ? data : data.applications || []);
+      } catch (err) {
+        console.error("Failed to fetch applications:", err);
+        setAppsError("Could not load your applications. Please try refreshing.");
+      } finally {
+        setLoadingApps(false);
+      }
+    })();
+  }, []);
 
   const handleLogout = () => {
     logoutCandidate();
@@ -183,15 +200,14 @@ export default function CandidatePortal() {
             },
             {
               label: "Avg AI Score",
-              value: Math.round(
-                myApplications.reduce((a, c) => a + c.score, 0) /
-                  myApplications.length,
-              ),
+              value: myApplications.length
+                ? Math.round(myApplications.reduce((a, c) => a + (c.score || 0), 0) / myApplications.length)
+                : 0,
               color: "#1ECFAA",
             },
             {
               label: "Emails Received",
-              value: myApplications.reduce((a, c) => a + c.emails.length, 0),
+              value: myApplications.reduce((a, c) => a + (c.emails?.length || 0), 0),
               color: "#8B70F5",
             },
           ].map((s, i) => (
@@ -252,7 +268,42 @@ export default function CandidatePortal() {
         >
           Your Applications
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {loadingApps ? (
+          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--m2)", fontSize: 14 }}>
+            Loading your applications...
+          </div>
+        ) : appsError ? (
+          <div style={{
+            padding: "20px 24px",
+            background: "var(--red-dim)",
+            border: "1px solid rgba(240,80,104,0.2)",
+            borderRadius: 10,
+            fontSize: 14,
+            color: "var(--m1)",
+          }}>
+            ⚠️ {appsError}
+          </div>
+        ) : myApplications.length === 0 ? (
+          <div style={{
+            textAlign: "center",
+            padding: "60px 32px",
+            background: "var(--s1)",
+            border: "1px solid var(--b1)",
+            borderRadius: 16,
+          }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+            <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              No applications yet
+            </div>
+            <p style={{ color: "var(--m1)", fontSize: 14, marginBottom: 20 }}>
+              You haven't applied to any jobs yet. Browse open positions and apply!
+            </p>
+            <Link to="/jobs" className="btn btn-primary" style={{ display: "inline-flex" }}>
+              Browse Jobs →
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {myApplications.map((app) => {
             const scoreColor =
               app.score >= 80
@@ -550,7 +601,8 @@ export default function CandidatePortal() {
               </div>
             );
           })}
-        </div>
+          </div>
+        )}
 
         {/* Browse more jobs CTA */}
         <div

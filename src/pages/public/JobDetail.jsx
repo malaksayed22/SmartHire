@@ -3,10 +3,12 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import PublicNav from "../../components/PublicNav";
 import { DeptTag } from "../../components/UI";
 import { JOBS } from "../../data/mock";
+import { useAuth } from "../../context/AuthContext";
 
 export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { candidateUser } = useAuth();
   const [apiJob, setApiJob] = useState(null);
   const mockJob = JOBS.find((j) => j.id === id);
   const job = apiJob || mockJob;
@@ -71,9 +73,14 @@ export default function JobDetail() {
           strengths: raw.strengths ?? raw.pros ?? [],
           weaknesses: raw.weaknesses ?? raw.cons ?? raw.improvements ?? [],
         });
+        if (!candidateUser) {
+          console.warn("User is not logged in — application will not appear in their portal.");
+        }
         try {
           await submitApplication(job._id, file);
-        } catch {} // silently fail if candidate is not authenticated
+        } catch (submitErr) {
+          console.warn("submitApplication failed (user may not be logged in):", submitErr);
+        }
       } else {
         // Demo/mock job — generate a simulated score for the preview
         const seed = file.name
@@ -99,7 +106,7 @@ export default function JobDetail() {
     } catch (err) {
       console.error("AI scoring failed:", err);
       setAiError(
-        "AI scoring unavailable — your application was still submitted!",
+        "Could not connect to the AI service. Please check your connection and try again."
       );
       setSubmitted(true);
     } finally {
@@ -381,6 +388,7 @@ export default function JobDetail() {
                 navigate={navigate}
                 aiResult={aiResult}
                 aiError={aiError}
+                candidateUser={candidateUser}
               />
             ) : (
               <div>
@@ -822,7 +830,7 @@ function Section({ title, children }) {
   );
 }
 
-function SuccessState({ job, navigate, aiResult, aiError }) {
+function SuccessState({ job, navigate, aiResult, aiError, candidateUser }) {
   return (
     <div style={{ textAlign: "center", animation: "scaleIn 0.4s ease" }}>
       <div
@@ -1080,6 +1088,26 @@ function SuccessState({ job, navigate, aiResult, aiError }) {
           </div>
         ))}
       </div>
+      {!candidateUser && (
+        <div style={{
+          marginTop: 16,
+          padding: "14px 18px",
+          background: "var(--blue-dim)",
+          border: "1px solid rgba(91,142,248,0.25)",
+          borderRadius: 10,
+          fontSize: 13.5,
+          color: "var(--m1)",
+          textAlign: "left",
+          marginBottom: 16,
+        }}>
+          💡 <strong style={{ color: "var(--text)" }}>Want to track this application?</strong>
+          {" "}
+          <Link to="/candidate/login" style={{ color: "var(--blue)" }}>
+            Log in or create an account
+          </Link>
+          {" "}with the same email you used to apply.
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <Link
           to="/candidate/login"

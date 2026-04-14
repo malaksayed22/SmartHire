@@ -18,6 +18,27 @@ export function AuthProvider({ children }) {
     }
   });
 
+  useEffect(() => {
+    // Keep local auth state aligned with server cookies to avoid stale signed-in UI.
+    (async () => {
+      if (!candidateUser) return;
+
+      try {
+        const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim() || "/api";
+        const res = await fetch(`${BASE_URL}/candidate/my-applications`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          throw new Error("candidate session is not active");
+        }
+      } catch {
+        setCandidateUser(null);
+        localStorage.removeItem("sh_cand_user");
+      }
+    })();
+  }, [candidateUser]);
+
   const deriveNameFromEmail = (email) => {
     const local = (email || "").split("@")[0];
     return (

@@ -894,7 +894,7 @@ function AuthGate({ jobId, navigate }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <button
           className="btn btn-primary"
-          onClick={() => navigate(`/candidate/signup?redirect=/jobs/${jobId}`)}
+          onClick={() => navigate(`/candidate/login?redirect=/jobs/${jobId}`)}
           style={{
             width: "100%",
             justifyContent: "center",
@@ -903,11 +903,11 @@ function AuthGate({ jobId, navigate }) {
             borderRadius: 10,
           }}
         >
-          Create Account →
+          Sign In to Apply →
         </button>
         <button
           className="btn btn-ghost"
-          onClick={() => navigate(`/candidate/login?redirect=/jobs/${jobId}`)}
+          onClick={() => navigate(`/candidate/signup?redirect=/jobs/${jobId}`)}
           style={{
             width: "100%",
             justifyContent: "center",
@@ -916,7 +916,7 @@ function AuthGate({ jobId, navigate }) {
             borderRadius: 10,
           }}
         >
-          Already have an account? Log in
+          New here? Create account
         </button>
       </div>
       <p style={{ marginTop: 20, fontSize: 12, color: "var(--m2)" }}>

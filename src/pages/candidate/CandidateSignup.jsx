@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export default function CandidateSignup() {
@@ -12,6 +12,8 @@ export default function CandidateSignup() {
   const [error, setError] = useState("");
   const { signupCandidate } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = new URLSearchParams(location.search).get("redirect") || "/candidate/portal";
 
   const handleSignup = async () => {
     if (!name || !email || !phone || !password || !confirm) {
@@ -26,7 +28,7 @@ export default function CandidateSignup() {
     setError("");
     try {
       await signupCandidate(name, email, phone, password);
-      navigate("/candidate/portal");
+      navigate(redirectTo);
     } catch (err) {
       setError(err.message || "Registration failed. Try a different email.");
     } finally {

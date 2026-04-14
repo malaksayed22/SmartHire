@@ -74,12 +74,17 @@ export default function JobDetail() {
           weaknesses: raw.weaknesses ?? raw.cons ?? raw.improvements ?? [],
         });
         if (!candidateUser) {
-          console.warn("User is not logged in — application will not appear in their portal.");
+          console.warn(
+            "User is not logged in — application will not appear in their portal.",
+          );
         }
         try {
           await submitApplication(job._id, file);
         } catch (submitErr) {
-          console.warn("submitApplication failed (user may not be logged in):", submitErr);
+          console.warn(
+            "submitApplication failed (user may not be logged in):",
+            submitErr,
+          );
         }
       } else {
         // Demo/mock job — generate a simulated score for the preview
@@ -106,7 +111,7 @@ export default function JobDetail() {
     } catch (err) {
       console.error("AI scoring failed:", err);
       setAiError(
-        "Could not connect to the AI service. Please check your connection and try again."
+        "Could not connect to the AI service. Please check your connection and try again.",
       );
       setSubmitted(true);
     } finally {
@@ -390,6 +395,8 @@ export default function JobDetail() {
                 aiError={aiError}
                 candidateUser={candidateUser}
               />
+            ) : !candidateUser ? (
+              <AuthGate jobId={id} navigate={navigate} />
             ) : (
               <div>
                 <div style={{ marginBottom: 28 }}>
@@ -810,6 +817,61 @@ function JobAIChat({ job }) {
   );
 }
 
+function AuthGate({ jobId, navigate }) {
+  return (
+    <div style={{ textAlign: "center", padding: "20px 8px" }}>
+      <div
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: "50%",
+          background: "var(--blue-dim)",
+          border: "1px solid rgba(91,142,248,0.3)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto 20px",
+          fontSize: 26,
+        }}
+      >
+        🔒
+      </div>
+      <h2
+        style={{
+          fontFamily: "'Syne', sans-serif",
+          fontSize: 20,
+          fontWeight: 700,
+          marginBottom: 10,
+        }}
+      >
+        Sign in to Apply
+      </h2>
+      <p style={{ fontSize: 14, color: "var(--m1)", lineHeight: 1.7, marginBottom: 28 }}>
+        Create a free account or log in to submit your application and track its status in your candidate portal.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <button
+          className="btn btn-primary"
+          onClick={() => navigate(`/candidate/signup?redirect=/jobs/${jobId}`)}
+          style={{ width: "100%", justifyContent: "center", padding: "13px", fontSize: 15, borderRadius: 10 }}
+        >
+          Create Account →
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => navigate(`/candidate/login?redirect=/jobs/${jobId}`)}
+          style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14, borderRadius: 10 }}
+        >
+          Already have an account? Log in
+        </button>
+      </div>
+      <p style={{ marginTop: 20, fontSize: 12, color: "var(--m2)" }}>
+        You'll return to this job after signing in.
+      </p>
+    </div>
+  );
+}
+
 function Section({ title, children }) {
   return (
     <div style={{ marginBottom: 36 }}>
@@ -1089,23 +1151,27 @@ function SuccessState({ job, navigate, aiResult, aiError, candidateUser }) {
         ))}
       </div>
       {!candidateUser && (
-        <div style={{
-          marginTop: 16,
-          padding: "14px 18px",
-          background: "var(--blue-dim)",
-          border: "1px solid rgba(91,142,248,0.25)",
-          borderRadius: 10,
-          fontSize: 13.5,
-          color: "var(--m1)",
-          textAlign: "left",
-          marginBottom: 16,
-        }}>
-          💡 <strong style={{ color: "var(--text)" }}>Want to track this application?</strong>
-          {" "}
+        <div
+          style={{
+            marginTop: 16,
+            padding: "14px 18px",
+            background: "var(--blue-dim)",
+            border: "1px solid rgba(91,142,248,0.25)",
+            borderRadius: 10,
+            fontSize: 13.5,
+            color: "var(--m1)",
+            textAlign: "left",
+            marginBottom: 16,
+          }}
+        >
+          💡{" "}
+          <strong style={{ color: "var(--text)" }}>
+            Want to track this application?
+          </strong>{" "}
           <Link to="/candidate/login" style={{ color: "var(--blue)" }}>
             Log in or create an account
-          </Link>
-          {" "}with the same email you used to apply.
+          </Link>{" "}
+          with the same email you used to apply.
         </div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

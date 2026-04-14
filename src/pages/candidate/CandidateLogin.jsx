@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export default function CandidateLogin() {
@@ -9,6 +9,8 @@ export default function CandidateLogin() {
   const [error, setError] = useState("");
   const { loginCandidate } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = new URLSearchParams(location.search).get("redirect") || "/candidate/portal";
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -19,7 +21,7 @@ export default function CandidateLogin() {
     setError("");
     try {
       await loginCandidate(email, password);
-      navigate("/candidate/portal");
+      navigate(redirectTo);
     } catch (err) {
       setError(err.message || "Login failed. Check your credentials.");
     } finally {

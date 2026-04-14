@@ -1,12 +1,15 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import PublicNav from "../../components/PublicNav";
 import { DeptTag } from "../../components/UI";
 import { JOBS } from "../../data/mock";
+import { useAuth } from "../../context/AuthContext";
 
 const TYPES = ["Full-time", "Part-time", "Remote", "Contract"];
 
 export default function JobBoard() {
+  const navigate = useNavigate();
+  const { candidateUser } = useAuth();
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("All");
   const [selectedTypes, setSelectedTypes] = useState([]);
@@ -281,7 +284,12 @@ export default function JobBoard() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {filtered.map((job) => (
-                <JobCard key={job.id} job={job} />
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  candidateUser={candidateUser}
+                  navigate={navigate}
+                />
               ))}
               {filtered.length === 0 && (
                 <div style={{ textAlign: "center", padding: "60px 24px" }}>
@@ -309,7 +317,7 @@ export default function JobBoard() {
   );
 }
 
-function JobCard({ job }) {
+function JobCard({ job, candidateUser, navigate }) {
   const daysAgo = Math.floor((Date.now() - new Date(job.posted)) / 86400000);
   return (
     <div className="card" style={{ padding: "24px 28px", cursor: "default" }}>
@@ -410,13 +418,25 @@ function JobCard({ job }) {
           </div>
         </div>
         <div style={{ flexShrink: 0 }}>
-          <Link
-            to={`/jobs/${job.id}`}
-            className="btn btn-primary"
-            style={{ whiteSpace: "nowrap" }}
-          >
-            Apply Now →
-          </Link>
+          {candidateUser ? (
+            <Link
+              to={`/jobs/${job.id}`}
+              className="btn btn-primary"
+              style={{ whiteSpace: "nowrap" }}
+            >
+              Apply Now →
+            </Link>
+          ) : (
+            <button
+              className="btn btn-primary"
+              onClick={() =>
+                navigate(`/candidate/signup?redirect=/jobs/${job.id}`)
+              }
+              style={{ whiteSpace: "nowrap" }}
+            >
+              Apply Now →
+            </button>
+          )}
         </div>
       </div>
     </div>

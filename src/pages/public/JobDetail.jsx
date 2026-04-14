@@ -27,6 +27,41 @@ export default function JobDetail() {
   const [aiResult, setAiResult] = useState(null);
   const [aiError, setAiError] = useState(null);
 
+  const unwrapScorePayload = (payload) => {
+    let current = payload;
+
+    for (let depth = 0; depth < 5; depth += 1) {
+      if (!current || typeof current !== "object") {
+        break;
+      }
+
+      if (
+        current.score != null ||
+        current.match_score != null ||
+        current.percentage != null ||
+        current.summary != null ||
+        Array.isArray(current.strengths) ||
+        Array.isArray(current.weaknesses)
+      ) {
+        return current;
+      }
+
+      if (current.result != null) {
+        current = current.result;
+        continue;
+      }
+
+      if (current.data != null) {
+        current = current.data;
+        continue;
+      }
+
+      break;
+    }
+
+    return current || {};
+  };
+
   // Try to load real job from backend (uses _id for API calls)
   useEffect(() => {
     (async () => {
@@ -65,8 +100,7 @@ export default function JobDetail() {
         const { scoreResumeByJob, submitApplication } =
           await import("../../services/api");
         const scored = await scoreResumeByJob(job._id, file);
-        // Normalize result shape — backend may return flat or nested under .result
-        const raw = scored.result ?? scored;
+        const raw = unwrapScorePayload(scored);
         setAiResult({
           score: raw.score ?? raw.match_score ?? raw.percentage ?? 0,
           summary: raw.summary ?? raw.feedback ?? raw.analysis ?? "",
@@ -846,21 +880,41 @@ function AuthGate({ jobId, navigate }) {
       >
         Sign in to Apply
       </h2>
-      <p style={{ fontSize: 14, color: "var(--m1)", lineHeight: 1.7, marginBottom: 28 }}>
-        Create a free account or log in to submit your application and track its status in your candidate portal.
+      <p
+        style={{
+          fontSize: 14,
+          color: "var(--m1)",
+          lineHeight: 1.7,
+          marginBottom: 28,
+        }}
+      >
+        Create a free account or log in to submit your application and track its
+        status in your candidate portal.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <button
           className="btn btn-primary"
           onClick={() => navigate(`/candidate/signup?redirect=/jobs/${jobId}`)}
-          style={{ width: "100%", justifyContent: "center", padding: "13px", fontSize: 15, borderRadius: 10 }}
+          style={{
+            width: "100%",
+            justifyContent: "center",
+            padding: "13px",
+            fontSize: 15,
+            borderRadius: 10,
+          }}
         >
           Create Account →
         </button>
         <button
           className="btn btn-ghost"
           onClick={() => navigate(`/candidate/login?redirect=/jobs/${jobId}`)}
-          style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14, borderRadius: 10 }}
+          style={{
+            width: "100%",
+            justifyContent: "center",
+            padding: "12px",
+            fontSize: 14,
+            borderRadius: 10,
+          }}
         >
           Already have an account? Log in
         </button>
@@ -1176,7 +1230,7 @@ function SuccessState({ job, navigate, aiResult, aiError, candidateUser }) {
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <Link
-          to="/candidate/login"
+          to={candidateUser ? "/candidate/portal" : "/candidate/login"}
           className="btn btn-primary"
           style={{ width: "100%", justifyContent: "center" }}
         >

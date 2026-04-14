@@ -430,7 +430,7 @@ function JobCard({ job, candidateUser, navigate }) {
             <button
               className="btn btn-primary"
               onClick={() =>
-                navigate(`/candidate/signup?redirect=/jobs/${job.id}`)
+                navigate(`/candidate/login?redirect=/jobs/${job.id}`)
               }
               style={{ whiteSpace: "nowrap" }}
             >

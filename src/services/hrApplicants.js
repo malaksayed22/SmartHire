@@ -96,17 +96,19 @@ export function normalizeRankRow(row, jobTitle, postId) {
       row.hiring_stage ??
       row.state,
   );
-  const resolvedPostId =
-    row.post_id ??
-    row.postId ??
-    row.job_id ??
-    row.jobId ??
-    row.position_id ??
-    postId;
+  const postKey =
+    canonicalPostId(postId) ||
+    canonicalPostId(
+      row.post_id ??
+        row.postId ??
+        row.job_id ??
+        row.jobId ??
+        row.position_id ??
+        "",
+    );
 
   const uid =
     row._id ?? row.application_id ?? row.id ?? `${email || name}`;
-  const postKey = canonicalPostId(resolvedPostId);
   const id = `${postKey}--${String(uid)}`;
   const location = row.location || row.city || "—";
   const appliedRole =
@@ -145,7 +147,7 @@ export function normalizeRankRow(row, jobTitle, postId) {
     avatarColor: avatarColorFromName(name),
     experience,
     skills: toSkillsArray(row.skills),
-    postId: canonicalPostId(resolvedPostId),
+    postId: postKey,
     jobTitle: appliedRole,
     summary:
       row.summary || row.bio || row.profile_summary || row.about || "",

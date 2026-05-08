@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import HRSidebar from "../../components/HRSidebar";
 import {
   Avatar,
@@ -19,29 +19,21 @@ import {
 import { rankCandidatesByPost } from "../../services/api";
 
 export default function HRCandidates() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const selectedPostId = useMemo(() => {
+    const sp = new URLSearchParams(location.search);
+    return canonicalPostId(sp.get("post") || sp.get("post_id") || "");
+  }, [location.search]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("score");
   const [ranking, setRanking] = useState(false);
   const [jobPosts, setJobPosts] = useState([]);
   const [applicants, setApplicants] = useState([]);
-  const [selectedPostId, setSelectedPostId] = useState(
-    () =>
-      canonicalPostId(
-        searchParams.get("post") || searchParams.get("post_id") || "",
-      ),
-  );
   const [rankResults, setRankResults] = useState(null);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const q = canonicalPostId(
-      searchParams.get("post") || searchParams.get("post_id") || "",
-    );
-    setSelectedPostId(q);
-  }, [searchParams]);
 
   const loadPipeline = useCallback(async () => {
     setLoading(true);
@@ -245,16 +237,13 @@ export default function HRCandidates() {
               value={selectedPostId}
               onChange={(e) => {
                 const v = e.target.value;
-                setSelectedPostId(v);
-                const next = new URLSearchParams(searchParams);
                 if (v) {
-                  next.set("post", v);
-                  next.delete("post_id");
+                  navigate(`/hr/candidates?post=${encodeURIComponent(v)}`, {
+                    replace: true,
+                  });
                 } else {
-                  next.delete("post");
-                  next.delete("post_id");
+                  navigate("/hr/candidates", { replace: true });
                 }
-                setSearchParams(next, { replace: true });
               }}
               style={{
                 height: 32,

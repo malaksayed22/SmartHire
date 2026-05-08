@@ -86,14 +86,64 @@ function pickApplicantCount(j) {
   return 0;
 }
 
+/** intelligent-cv returns `{ success, message, data: JobPost[] }`; unwrap to an array */
+export function extractJobArray(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (payload.success === true && payload.data != null) {
+    const inner = payload.data;
+    if (Array.isArray(inner)) return inner;
+    if (inner && typeof inner === "object") {
+      if (Array.isArray(inner.posts)) return inner.posts;
+      if (Array.isArray(inner.jobs)) return inner.jobs;
+    }
+  }
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.posts)) return payload.posts;
+  if (Array.isArray(payload.jobs)) return payload.jobs;
+  return [];
+}
+
 /** Normalize API job shape → UI-compatible shape */
 export function normalizeJob(j) {
+  if (!j || typeof j !== "object") {
+    return {
+      id: "",
+      _id: "",
+      title: "Job",
+      department: "General",
+      location: "—",
+      type: "Full-time",
+      salary: "Competitive",
+      posted: new Date().toISOString().split("T")[0],
+      applicants: 0,
+      status: "active",
+      description: "",
+      responsibilities: [],
+      requirements: [],
+      nice: [],
+      skills: [],
+      color: "blue",
+    };
+  }
+
   const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-  const salaryStr =
-    j.salary_min != null && j.salary_max != null
-      ? `${j.salary_currency || "$"}${Number(j.salary_min).toLocaleString()} – ${j.salary_currency || "$"}${Number(j.salary_max).toLocaleString()}/${j.salary_period || "mo"}`
-      : j.salary || "Competitive";
+  /** Railway / intelligent-cv uses nested `salary: { min, max, currency, period }` — never pass through as object or React crashes */
+  let salaryStr = "Competitive";
+  if (
+    j.salary &&
+    typeof j.salary === "object" &&
+    j.salary.min != null &&
+    j.salary.max != null
+  ) {
+    const c = j.salary.currency || "$";
+    salaryStr = `${c}${Number(j.salary.min).toLocaleString()} – ${c}${Number(j.salary.max).toLocaleString()}/${j.salary.period || "mo"}`;
+  } else if (j.salary_min != null && j.salary_max != null) {
+    salaryStr = `${j.salary_currency || "$"}${Number(j.salary_min).toLocaleString()} – ${j.salary_currency || "$"}${Number(j.salary_max).toLocaleString()}/${j.salary_period || "mo"}`;
+  } else if (typeof j.salary === "string" && j.salary.trim()) {
+    salaryStr = j.salary.trim();
+  }
 
   const toArray = (v) =>
     Array.isArray(v)
@@ -112,12 +162,19 @@ export function normalizeJob(j) {
     department: j.department || capitalize(j.work_mode) || "General",
     location: capitalize(j.work_mode) || "On-site",
     type: j.employment_type
-      ? j.employment_type.split("-").map(capitalize).join("-")
+      ? String(j.employment_type)
+          .split("-")
+          .map(capitalize)
+          .join("-")
       : j.type || "Full-time",
     salary: salaryStr,
-    posted: j.created_at
-      ? j.created_at.split("T")[0]
-      : j.posted || new Date().toISOString().split("T")[0],
+    posted: (() => {
+      const raw =
+        j.created_at || j.createdAt || j.posted_at || j.posted || j.postedAt;
+      if (raw == null) return new Date().toISOString().split("T")[0];
+      const s = typeof raw === "string" ? raw : String(raw);
+      return s.includes("T") ? s.split("T")[0] : s.slice(0, 10);
+    })(),
     applicants: pickApplicantCount(j),
     status:
       j.is_active != null
@@ -201,11 +258,9 @@ export async function getActiveJobs() {
   const res = await apiFetch(`${BASE_URL}/candidate/get-posts`, {
     credentials: "include",
   });
-  if (!res.ok) throw new Error("Failed to fetch jobs");
-  const data = await res.json();
-  return Array.isArray(data)
-    ? data
-    : data.posts || data.data || data.jobs || [];
+  if (!res.ok) throw new Error(await extractError(res));
+  const payload = await res.json();
+  return extractJobArray(payload);
 }
 
 // ── Jobs (HR) ─────────────────────────────────────────────────────────────────
@@ -214,11 +269,9 @@ export async function getHRJobs() {
   const res = await apiFetch(`${BASE_URL}/hr/get-posts`, {
     credentials: "include",
   });
-  if (!res.ok) throw new Error("Failed to fetch HR jobs");
-  const data = await res.json();
-  return Array.isArray(data)
-    ? data
-    : data.posts || data.data || data.jobs || [];
+  if (!res.ok) throw new Error(await extractError(res));
+  const payload = await res.json();
+  return extractJobArray(payload);
 }
 
 export async function addJobPost(data) {

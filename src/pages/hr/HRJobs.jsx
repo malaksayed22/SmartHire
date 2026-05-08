@@ -357,7 +357,7 @@ export default function HRJobs() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1fr 110px 90px 80px 210px",
+                gridTemplateColumns: "2fr 1fr 110px 90px 80px 170px",
                 padding: "10px 20px",
                 borderBottom: "1px solid var(--b1)",
                 background: "var(--s1)",
@@ -418,7 +418,7 @@ export default function HRJobs() {
                   key={job.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "2fr 1fr 110px 90px 80px 210px",
+                    gridTemplateColumns: "2fr 1fr 110px 90px 80px 170px",
                     padding: "14px 20px",
                     borderBottom: "1px solid var(--b1)",
                     alignItems: "center",
@@ -479,13 +479,6 @@ export default function HRJobs() {
                   <div
                     style={{ display: "flex", gap: 6, alignItems: "center" }}
                   >
-                    <Link
-                      to={`/jobs/${job.id}`}
-                      className="btn btn-ghost btn-sm"
-                      style={{ fontSize: 12 }}
-                    >
-                      View
-                    </Link>
                     <Link
                       to={`/hr/candidates?post=${encodeURIComponent(canonicalPostId(job._id || job.id))}`}
                       className="btn btn-primary btn-sm"

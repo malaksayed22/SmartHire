@@ -1,8 +1,14 @@
 // src/services/api.js — Main SmartHire backend (proxied via Vite → http://localhost:3000)
 
-// Use /api prefix — Vite dev server proxies /api/* → localhost:3000/*
-// In production build, set VITE_API_BASE_URL to the real backend URL
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim() || "/api";
+// Dev: Vite proxies /api/* → localhost:3000/* (see vite.config.js).
+// Prod: use VITE_API_BASE_URL if set; otherwise call Railway directly (CORS + credentials
+// are configured for smart-hire-build.vercel.app). This avoids relying on Vercel /api rewrites.
+const trimmedEnv = (import.meta.env.VITE_API_BASE_URL || "").trim();
+const BASE_URL =
+  trimmedEnv ||
+  (import.meta.env.DEV
+    ? "/api"
+    : "https://intelligent-cv-production.up.railway.app");
 
 // All requests include cookies for session auth
 const opts = (method, body) => ({ method, credentials: "include", body });

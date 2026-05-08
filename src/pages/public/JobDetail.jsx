@@ -4,13 +4,23 @@ import PublicNav from "../../components/PublicNav";
 import { DeptTag } from "../../components/UI";
 import { JOBS } from "../../data/mock";
 import { useAuth } from "../../context/AuthContext";
+import { canonicalPostId } from "../../services/hrApplicants";
+
+/** Backend uses Mongo-style ids; mock jobs use "1","2" — never POST those as post_id. */
+function isLikelyBackendPostId(v) {
+  if (v == null) return false;
+  const s = String(v).trim();
+  return /^[a-fA-F0-9]{24}$/.test(s);
+}
 
 export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { candidateUser } = useAuth();
   const [apiJob, setApiJob] = useState(null);
-  const mockJob = JOBS.find((j) => j.id === id);
+  const [jobListLoaded, setJobListLoaded] = useState(false);
+  const routeId = id != null ? String(id).trim() : "";
+  const mockJob = JOBS.find((j) => j.id === routeId || j.id === id);
   const job = apiJob || mockJob;
   const [form, setForm] = useState({
     name: "",
@@ -62,18 +72,87 @@ export default function JobDetail() {
     return current || {};
   };
 
-  // Try to load real job from backend (uses _id for API calls)
+  // Map URL → real post: exact id match, else same title+dept as mock (fixes /jobs/2 vs Mongo _id)
   useEffect(() => {
+    let cancelled = false;
+    setApiJob(null);
+    setJobListLoaded(false);
     (async () => {
       try {
         const { getActiveJobs, normalizeJob } =
           await import("../../services/api");
         const jobs = await getActiveJobs();
-        const found = jobs.find((j) => j._id === id || j.id === id);
-        if (found) setApiJob(normalizeJob(found));
-      } catch {}
+        if (cancelled || !Array.isArray(jobs)) return;
+
+        const routeKey = canonicalPostId(routeId) || routeId;
+        const rowKeys = (j) => {
+          const a = canonicalPostId(j?._id);
+          const b = canonicalPostId(j?.id);
+          const c = j?._id != null ? String(j._id).trim() : "";
+          const d = j?.id != null ? String(j.id).trim() : "";
+          return [a, b, c, d].filter(Boolean);
+        };
+
+        let found = jobs.find((j) => {
+          const keys = rowKeys(j);
+          return (
+            keys.includes(routeKey) ||
+            keys.includes(id) ||
+            keys.includes(routeId)
+          );
+        });
+
+        const mock = JOBS.find((j) => j.id === routeId || j.id === id);
+        if (!found && mock) {
+          const normTitle = (s) =>
+            (s || "")
+              .trim()
+              .toLowerCase()
+              .replace(/[/\\|,]+/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+          const normDept = (s) =>
+            (s || "")
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, " ")
+              .trim();
+          const nt = normTitle(mock.title);
+          const nd = normDept(mock.department);
+          const ranked = jobs
+            .map((j) => {
+              const jt = normTitle(j.title);
+              const jd = normDept(j.department);
+              let score = 0;
+              if (jt === nt) score += 100;
+              else if (nt.length >= 8 && (jt.includes(nt) || nt.includes(jt)))
+                score += 70;
+              if (nd && jd === nd) score += 40;
+              return { j, score };
+            })
+            .filter((x) => x.score >= 70)
+            .sort((a, b) => b.score - a.score);
+          found = ranked[0]?.j;
+        }
+
+        if (!cancelled && found) {
+          const norm = normalizeJob(found);
+          setApiJob(norm);
+          const slug = String(norm._id || norm.id || "").trim();
+          if (mock && slug && routeId !== slug) {
+            navigate(`/jobs/${slug}`, { replace: true });
+          }
+        }
+      } catch {
+        /* offline / API error — mock listing only */
+      } finally {
+        if (!cancelled) setJobListLoaded(true);
+      }
     })();
-  }, [id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, routeId, navigate]);
 
   if (!job)
     return (
@@ -95,11 +174,26 @@ export default function JobDetail() {
     setSubmitting(true);
     setAiError(null);
     try {
-      if (job._id) {
+      if (!jobListLoaded) {
+        setAiError(
+          "Still loading this job — please wait a second and try again.",
+        );
+        return;
+      }
+
+      const postJob = apiJob || job;
+      const rawPostId = postJob?._id ?? postJob?.id;
+      const postId =
+        (rawPostId != null ? String(rawPostId).trim() : "") || "";
+      const canPersist =
+        Boolean(postId) &&
+        (apiJob != null || isLikelyBackendPostId(postId));
+
+      if (canPersist) {
         // Real DB job — persist application first, score as a best-effort enhancement.
         const { scoreResumeByJob, submitApplication } =
           await import("../../services/api");
-        await submitApplication(job._id, file, {
+        await submitApplication(postId, file, {
           name: form.name,
           email: form.email,
           phone: form.phone,
@@ -116,14 +210,14 @@ export default function JobDetail() {
             candidatePhone: form.phone,
             linkedin: form.linkedin,
             coverLetter: form.cover,
-            postId: job._id,
-            jobTitle: job.title,
+            postId,
+            jobTitle: postJob.title,
           });
         } catch (n8nErr) {
           console.warn("n8n application webhook:", n8nErr);
         }
         try {
-          const scored = await scoreResumeByJob(job._id, file);
+          const scored = await scoreResumeByJob(postId, file);
           const raw = unwrapScorePayload(scored);
           setAiResult({
             score: raw.score ?? raw.match_score ?? raw.percentage ?? 0,
@@ -137,28 +231,18 @@ export default function JobDetail() {
             "Application submitted successfully, but AI scoring is temporarily unavailable.",
           );
         }
+        setSubmitted(true);
+      } else if (mockJob && !apiJob) {
+        setAiError(
+          "This job could not be matched to a live opening on the server. Open the Jobs page and apply from the listing so your application is saved for HR.",
+        );
+        setSubmitted(false);
       } else {
-        // Demo/mock job — generate a simulated score for the preview
-        const seed = file.name
-          .split("")
-          .reduce((a, c) => a + c.charCodeAt(0), 0);
-        const demoScore = 62 + (seed % 28); // deterministic 62–89
-        setAiResult({
-          score: demoScore,
-          summary:
-            "Your resume was analysed against the job requirements. This is a simulated preview score — connect to the live backend for a real AI evaluation.",
-          strengths: [
-            "Strong keyword alignment with job description",
-            "Relevant experience detected",
-            "Clear formatting and structure",
-          ],
-          weaknesses: [
-            "Some required skills could be highlighted more prominently",
-            "Consider quantifying achievements with metrics",
-          ],
-        });
+        setAiError(
+          "Applications must go through a live job posting. Open Careers and choose a role from the list.",
+        );
+        setSubmitted(false);
       }
-      setSubmitted(true);
     } catch (err) {
       console.error("Application submit failed:", err);
       setAiError(

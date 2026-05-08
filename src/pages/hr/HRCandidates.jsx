@@ -15,6 +15,7 @@ import {
   normalizeRankRow,
   normalizeStatus,
   canonicalPostId,
+  applyApplicantPipelineMeta,
 } from "../../services/hrApplicants";
 import { rankCandidatesByPost } from "../../services/api";
 
@@ -41,7 +42,7 @@ export default function HRCandidates() {
       const { jobs, applicants: a } =
         await fetchHRJobsAndRankedApplicants(24);
       setJobPosts(jobs);
-      setApplicants(a);
+      setApplicants(applyApplicantPipelineMeta(a));
     } catch (e) {
       setToast({
         message: e.message || "Could not load candidates",
@@ -109,7 +110,7 @@ export default function HRCandidates() {
             next.push(r);
           }
         }
-        return next;
+        return applyApplicantPipelineMeta(next);
       });
       setToast({ message: "Ranking updated for this post.", type: "success" });
       setTimeout(() => setToast(null), 3000);

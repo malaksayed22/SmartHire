@@ -17,6 +17,7 @@ import {
   fetchHRJobsAndRankedApplicants,
   buildWeeklySeries,
   normalizeStatus,
+  applyApplicantPipelineMeta,
 } from "../../services/hrApplicants";
 
 const STATUS_PIE_COLORS = {
@@ -68,7 +69,7 @@ export default function HRAnalytics() {
           await fetchHRJobsAndRankedApplicants(24);
         if (cancelled) return;
         setJobs(j);
-        setCandidates(applicants);
+        setCandidates(applyApplicantPipelineMeta(applicants));
       } catch (e) {
         if (!cancelled) setError(e.message || "Failed to load analytics");
       } finally {

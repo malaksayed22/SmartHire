@@ -268,6 +268,34 @@ export async function rankCandidatesByPost(postId) {
   return res.json();
 }
 
+/**
+ * Persist pipeline status for an application (HR). If the backend has no route,
+ * callers should still use setApplicantPipelineMeta for local UX.
+ */
+export async function updateHRApplicationStatus({
+  applicationId,
+  postId,
+  status,
+}) {
+  if (!applicationId || !status) {
+    throw new Error("applicationId and status are required");
+  }
+  const form = new FormData();
+  form.append("application_id", String(applicationId));
+  form.append("_id", String(applicationId));
+  if (postId != null && String(postId) !== "") {
+    form.append("post_id", String(postId));
+  }
+  form.append("status", String(status));
+  const res = await apiFetch(`${BASE_URL}/hr/update-application-status`, {
+    method: "PUT",
+    credentials: "include",
+    body: form,
+  });
+  if (!res.ok) throw new Error(await extractError(res));
+  return res.json();
+}
+
 // ── Applications ──────────────────────────────────────────────────────────────
 
 export async function submitApplication(postId, file) {

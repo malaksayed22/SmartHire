@@ -3,12 +3,19 @@ import { useParams, Link, useLocation } from "react-router-dom";
 import HRSidebar from "../../components/HRSidebar";
 import { Avatar, StatusPill, Toast } from "../../components/UI";
 import { CANDIDATES, STATUS_LABELS, getScoreColor } from "../../data/mock";
-import { toDetailCandidate } from "../../services/hrApplicants";
+import {
+  toDetailCandidate,
+  normalizeStatus,
+  setApplicantPipelineMeta,
+  getApplicantPipelineMetaMap,
+  pickApplicationRecordId,
+} from "../../services/hrApplicants";
 
 export default function CandidateDetail() {
   const { id } = useParams();
   const location = useLocation();
   const passed = location.state?.applicant;
+  const [localMetaVersion, setLocalMetaVersion] = useState(0);
 
   const stored = useMemo(() => {
     if (!id) return null;
@@ -21,8 +28,22 @@ export default function CandidateDetail() {
   }, [id]);
 
   const mock = CANDIDATES.find((c) => c.id === id);
-  const source = passed || stored || mock;
-  const candidate = toDetailCandidate(source);
+
+  const mergedSource = useMemo(() => {
+    const base = passed || stored || mock;
+    if (!base || !id) return base;
+    const meta = getApplicantPipelineMetaMap()[id];
+    if (!meta) return base;
+    return {
+      ...base,
+      ...(meta.status != null && meta.status !== ""
+        ? { status: normalizeStatus(meta.status) }
+        : {}),
+      ...(meta.notes != null ? { notes: String(meta.notes) } : {}),
+    };
+  }, [passed, stored, mock, id, localMetaVersion]);
+
+  const candidate = toDetailCandidate(mergedSource);
 
   const [status, setStatus] = useState(candidate?.status || "new");
   const [notes, setNotes] = useState(candidate?.notes || "");
@@ -42,7 +63,7 @@ export default function CandidateDetail() {
       setStatus(candidate.status || "new");
       setNotes(candidate.notes || "");
     }
-  }, [candidate?.id]);
+  }, [candidate?.id, candidate?.status, candidate?.notes]);
 
   if (!candidate) {
     return (
@@ -89,14 +110,50 @@ export default function CandidateDetail() {
   };
 
   const handleSave = () => {
-    setToast({ message: "Changes saved locally (demo)", type: "success" });
+    if (!id || !mergedSource) return;
+    setApplicantPipelineMeta(id, { notes });
+    setLocalMetaVersion((v) => v + 1);
+    try {
+      sessionStorage.setItem(
+        `hr_applicant_${id}`,
+        JSON.stringify({ ...mergedSource, notes }),
+      );
+    } catch (_) {}
+    setToast({ message: "Notes saved", type: "success" });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleStatusChange = (newStatus) => {
-    setStatus(newStatus);
+  const handleStatusChange = async (newStatus) => {
+    if (!id) return;
+    const canon = normalizeStatus(newStatus);
+    setStatus(canon);
+    setApplicantPipelineMeta(id, { status: canon });
+    setLocalMetaVersion((v) => v + 1);
+    const base = mergedSource;
+    if (base) {
+      try {
+        sessionStorage.setItem(
+          `hr_applicant_${id}`,
+          JSON.stringify({ ...base, status: canon }),
+        );
+      } catch (_) {}
+    }
+    try {
+      const appId = pickApplicationRecordId(base);
+      const postId = base?.postId;
+      if (appId) {
+        const { updateHRApplicationStatus } = await import("../../services/api");
+        await updateHRApplicationStatus({
+          applicationId: appId,
+          postId,
+          status: canon,
+        });
+      }
+    } catch (_) {
+      /* optional server route — local + list meta already updated */
+    }
     setToast({
-      message: `Status updated to ${STATUS_LABELS[newStatus]}`,
+      message: `Status saved · ${STATUS_LABELS[canon] || canon}`,
       type: "success",
     });
     setTimeout(() => setToast(null), 3000);

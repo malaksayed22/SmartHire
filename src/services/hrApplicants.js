@@ -66,6 +66,57 @@ export function normalizeStatus(raw) {
   return "new";
 }
 
+/** localStorage: HR-edited pipeline status & notes keyed by list row id (see normalizeRankRow `id`). */
+export const HR_APPLICANT_PIPELINE_META_KEY = "hr_applicant_pipeline_meta_v1";
+
+export function getApplicantPipelineMetaMap() {
+  try {
+    const raw = localStorage.getItem(HR_APPLICANT_PIPELINE_META_KEY);
+    const o = raw ? JSON.parse(raw) : {};
+    return o && typeof o === "object" ? o : {};
+  } catch {
+    return {};
+  }
+}
+
+export function setApplicantPipelineMeta(applicantListId, patch) {
+  if (!applicantListId) return;
+  const m = getApplicantPipelineMetaMap();
+  const prev = m[applicantListId] || {};
+  m[applicantListId] = { ...prev, ...patch, updatedAt: Date.now() };
+  try {
+    localStorage.setItem(HR_APPLICANT_PIPELINE_META_KEY, JSON.stringify(m));
+  } catch (_) {}
+}
+
+export function applyApplicantPipelineMeta(applicants) {
+  if (!Array.isArray(applicants) || applicants.length === 0) return applicants;
+  const m = getApplicantPipelineMetaMap();
+  if (!Object.keys(m).length) return applicants;
+  return applicants.map((a) => {
+    const meta = m[a.id];
+    if (!meta) return a;
+    const next = { ...a };
+    if (meta.status != null && meta.status !== "")
+      next.status = normalizeStatus(meta.status);
+    if (meta.notes != null) next.notes = String(meta.notes);
+    return next;
+  });
+}
+
+/** Id to send to HR update-status API (Mongo application id when available). */
+export function pickApplicationRecordId(source) {
+  if (!source) return null;
+  const raw = source.raw;
+  if (raw?.application_id != null && raw.application_id !== "")
+    return String(raw.application_id);
+  if (raw?._id != null && raw._id !== "") return String(raw._id);
+  const sid = source.id != null ? String(source.id) : "";
+  if (sid.includes("--")) return sid.split("--").pop() || null;
+  if (sid) return sid;
+  return null;
+}
+
 function avatarColorFromName(name) {
   const colors = ["blue", "violet", "teal", "amber"];
   let h = 0;

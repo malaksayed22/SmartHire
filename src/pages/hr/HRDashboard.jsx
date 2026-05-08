@@ -8,6 +8,7 @@ import {
   buildWeeklySeries,
   normalizeStatus,
   canonicalPostId,
+  applyApplicantPipelineMeta,
 } from "../../services/hrApplicants";
 import {
   BarChart,
@@ -71,7 +72,7 @@ export default function HRDashboard() {
           await fetchHRJobsAndRankedApplicants(24);
         if (!cancelled) {
           setJobs(j);
-          setApplicants(a);
+          setApplicants(applyApplicantPipelineMeta(a));
         }
       } catch (e) {
         if (!cancelled) setLoadError(e.message || "Could not load dashboard");

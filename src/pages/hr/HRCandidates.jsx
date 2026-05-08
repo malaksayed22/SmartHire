@@ -20,14 +20,11 @@ export default function HRCandidates() {
       try {
         const { getHRJobs, normalizeJob } = await import("../../services/api");
         const raw = await getHRJobs();
-        const posts = Array.isArray(raw)
-          ? raw.map(normalizeJob)
-          : (raw.posts || []).map(normalizeJob);
-        if (posts.length > 0) {
-          setJobPosts(posts);
-        } else {
-          setJobPosts([]);
-        }
+        const list = Array.isArray(raw)
+          ? raw
+          : raw?.posts || raw?.data || raw?.jobs || [];
+        const posts = list.map(normalizeJob);
+        setJobPosts(posts.length > 0 ? posts : MOCK_JOBS);
       } catch {
         // Backend unreachable — use mock jobs so UI stays functional
         setJobPosts(MOCK_JOBS);
@@ -61,7 +58,7 @@ export default function HRCandidates() {
       const data = await rankCandidatesByPost(selectedPostId);
       const results = Array.isArray(data)
         ? data
-        : data.ranked || data.candidates || [];
+        : data?.ranked || data?.candidates || data?.data || data?.results || [];
       setRankResults(results);
       setAiRanked(null);
     } catch (err) {
@@ -81,10 +78,14 @@ export default function HRCandidates() {
     ? aiRanked.map((r) => CANDIDATES.find((c) => c.id === r.id)).filter(Boolean)
     : CANDIDATES;
 
-  // Find the title of the currently selected job (for candidate filtering)
+  // Find the title of the currently selected job (for AI rank + optional filter)
   const selectedJobTitle = selectedPostId
     ? jobPosts.find((p) => (p._id || p.id) === selectedPostId)?.title || ""
     : "";
+
+  // Demo table rows use mock role titles; real API job titles rarely match — filtering
+  // by job would hide every row. Only apply job-title filter when using AI-reordered ids.
+  const filterTableByJobTitle = Boolean(aiRanked);
 
   const filtered = baseList
     .filter((c) => {
@@ -96,6 +97,7 @@ export default function HRCandidates() {
         c.location.toLowerCase().includes(s);
       const matchStatus = filter === "all" || c.status === filter;
       const matchJob =
+        !filterTableByJobTitle ||
         !selectedJobTitle ||
         c.appliedRole.toLowerCase() === selectedJobTitle.toLowerCase();
       return matchSearch && matchStatus && matchJob;
@@ -153,7 +155,8 @@ export default function HRCandidates() {
               Candidates
             </h1>
             <div style={{ fontSize: 12.5, color: "var(--m2)", marginTop: 2 }}>
-              {CANDIDATES.length} total · AI-ranked by score
+              {filtered.length} shown · {CANDIDATES.length} demo profiles · use job
+              dropdown for &quot;Re-rank with AI&quot;
             </div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -355,6 +358,7 @@ export default function HRCandidates() {
                   {s === "all"
                     ? baseList.filter(
                         (c) =>
+                          !filterTableByJobTitle ||
                           !selectedJobTitle ||
                           c.appliedRole.toLowerCase() ===
                             selectedJobTitle.toLowerCase(),
@@ -362,7 +366,8 @@ export default function HRCandidates() {
                     : baseList.filter(
                         (c) =>
                           c.status === s &&
-                          (!selectedJobTitle ||
+                          (!filterTableByJobTitle ||
+                            !selectedJobTitle ||
                             c.appliedRole.toLowerCase() ===
                               selectedJobTitle.toLowerCase()),
                       ).length}

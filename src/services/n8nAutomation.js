@@ -2,9 +2,10 @@
  * n8n webhook integration (browser → n8n Production/Test URL).
  *
  * Set in .env or Vercel:
- *   VITE_N8N_WEBHOOK_STATUS_URL      — status changes (HR portal) + optional catch‑all
- *   VITE_N8N_WEBHOOK_APPLICATION_URL — new applications (candidate apply); falls back to VITE_N8N_WEBHOOK_URL
- *   VITE_N8N_WEBHOOK_URL             — single webhook if both flows use one n8n workflow + Switch on `event`
+ *   VITE_N8N_WEBHOOK_STATUS_URL       — HR status changes except Shortlisted (or catch‑all if no shortlist URL)
+ *   VITE_N8N_WEBHOOK_SHORTLIST_URL    — optional; when set, status Shortlisted POSTs here instead of STATUS_URL
+ *   VITE_N8N_WEBHOOK_APPLICATION_URL  — new applications (candidate apply); falls back to VITE_N8N_WEBHOOK_URL
+ *   VITE_N8N_WEBHOOK_URL              — single webhook if everything routes in one n8n workflow + Switch on `event`
  *
  * Your n8n instance must allow CORS from your frontend origin, or call webhooks from the backend instead.
  */
@@ -27,8 +28,25 @@ export function getN8nWebhookApplicationUrl() {
   );
 }
 
+/** Dedicated Shortlisted workflow; when set, shortlisted POSTs here. */
+export function getN8nWebhookShortlistUrl() {
+  return trimEnv("VITE_N8N_WEBHOOK_SHORTLIST_URL");
+}
+
+function resolveStatusWebhookUrl(status) {
+  const st = String(status || "").toLowerCase();
+  if (st === "shortlisted") {
+    return getN8nWebhookShortlistUrl() || getN8nWebhookStatusUrl();
+  }
+  return getN8nWebhookStatusUrl();
+}
+
 export function n8nWebhooksConfigured() {
-  return Boolean(getN8nWebhookStatusUrl() || getN8nWebhookApplicationUrl());
+  return Boolean(
+    getN8nWebhookStatusUrl() ||
+      getN8nWebhookApplicationUrl() ||
+      getN8nWebhookShortlistUrl(),
+  );
 }
 
 const TOGGLE_KEY = "hr_n8n_workflow_toggle";
@@ -73,15 +91,15 @@ async function postJson(url, body) {
  * HR changed candidate pipeline status — drives Gmail templates in n8n (Switch on `status`).
  */
 export async function notifyCandidateStatusChanged(detail) {
-  const url = getN8nWebhookStatusUrl();
-  if (!url) return { ok: false, skipped: true, reason: "no_webhook_url" };
-
   const st = String(detail.status || "").toLowerCase();
   const shouldSend =
     isWorkflowEnabled("auto3") ||
     (isWorkflowEnabled("auto2") && st === "shortlisted");
   if (!shouldSend)
     return { ok: false, skipped: true, reason: "workflow_disabled" };
+
+  const url = resolveStatusWebhookUrl(st);
+  if (!url) return { ok: false, skipped: true, reason: "no_webhook_url" };
 
   const body = {
     event: "candidate_status_changed",
@@ -116,13 +134,17 @@ export async function notifyApplicationSubmitted(detail) {
  * HR Automations page — sends a safe test payload. Uses the same URLs as production.
  */
 export async function notifyN8nTest(workflowId, extra = {}) {
-  const url =
-    workflowId === "auto1"
-      ? getN8nWebhookApplicationUrl()
-      : getN8nWebhookStatusUrl();
+  let url;
+  if (workflowId === "auto1") {
+    url = getN8nWebhookApplicationUrl();
+  } else if (workflowId === "auto2") {
+    url = getN8nWebhookShortlistUrl() || getN8nWebhookStatusUrl();
+  } else {
+    url = getN8nWebhookStatusUrl();
+  }
   if (!url) {
     throw new Error(
-      "Missing webhook URL. Set VITE_N8N_WEBHOOK_APPLICATION_URL / VITE_N8N_WEBHOOK_STATUS_URL (or VITE_N8N_WEBHOOK_URL) in .env and redeploy.",
+      "Missing webhook URL. Set VITE_N8N_WEBHOOK_APPLICATION_URL, VITE_N8N_WEBHOOK_STATUS_URL, and optionally VITE_N8N_WEBHOOK_SHORTLIST_URL (or VITE_N8N_WEBHOOK_URL) in Vercel and redeploy.",
     );
   }
 

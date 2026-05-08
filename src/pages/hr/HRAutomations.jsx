@@ -6,6 +6,7 @@ import {
   n8nWebhooksConfigured,
   getN8nWebhookStatusUrl,
   getN8nWebhookApplicationUrl,
+  getN8nWebhookShortlistUrl,
   isWorkflowEnabled,
   setWorkflowEnabled,
   notifyN8nTest,
@@ -24,6 +25,7 @@ export default function HRAutomations() {
   const configured = n8nWebhooksConfigured();
   const statusUrl = getN8nWebhookStatusUrl();
   const applicationUrl = getN8nWebhookApplicationUrl();
+  const shortlistUrl = getN8nWebhookShortlistUrl();
 
   const toggle = (id) => {
     setAutomations((prev) => {
@@ -205,6 +207,7 @@ export default function HRAutomations() {
             >
               <span>Application URL: {applicationUrl ? "✓" : "—"}</span>
               <span>Status URL: {statusUrl ? "✓" : "—"}</span>
+              <span>Shortlist URL: {shortlistUrl ? "✓" : "—"}</span>
             </div>
           </div>
 

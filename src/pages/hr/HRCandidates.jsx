@@ -1,37 +1,54 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import HRSidebar from "../../components/HRSidebar";
-import { Avatar, StatusPill, ScoreBadge, Toast } from "../../components/UI";
-import { CANDIDATES, STATUS_LABELS, JOBS as MOCK_JOBS } from "../../data/mock";
+import {
+  Avatar,
+  StatusPill,
+  ScoreBadge,
+  Toast,
+  EmptyState,
+} from "../../components/UI";
+import { STATUS_LABELS } from "../../data/mock";
+import {
+  fetchHRJobsAndRankedApplicants,
+  parseRankList,
+  normalizeRankRow,
+} from "../../services/hrApplicants";
+import { rankCandidatesByPost } from "../../services/api";
 
 export default function HRCandidates() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("score");
-  const [aiRanked, setAiRanked] = useState(null);
   const [ranking, setRanking] = useState(false);
   const [jobPosts, setJobPosts] = useState([]);
+  const [applicants, setApplicants] = useState([]);
   const [selectedPostId, setSelectedPostId] = useState("");
   const [rankResults, setRankResults] = useState(null);
   const [toast, setToast] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadPipeline = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { jobs, applicants: a } =
+        await fetchHRJobsAndRankedApplicants(24);
+      setJobPosts(jobs);
+      setApplicants(a);
+    } catch (e) {
+      setToast({
+        message: e.message || "Could not load candidates",
+        type: "error",
+      });
+      setTimeout(() => setToast(null), 5000);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const { getHRJobs, normalizeJob } = await import("../../services/api");
-        const raw = await getHRJobs();
-        const list = Array.isArray(raw)
-          ? raw
-          : raw?.posts || raw?.data || raw?.jobs || [];
-        const posts = list.map(normalizeJob);
-        setJobPosts(posts.length > 0 ? posts : MOCK_JOBS);
-      } catch {
-        // Backend unreachable — use mock jobs so UI stays functional
-        setJobPosts(MOCK_JOBS);
-        // Leave selectedPostId as "" (All Jobs)
-      }
-    })();
-  }, []);
+    loadPipeline();
+  }, [loadPipeline]);
 
   const statuses = [
     "all",
@@ -54,18 +71,45 @@ export default function HRCandidates() {
     }
     setRanking(true);
     try {
-      const { rankCandidatesByPost } = await import("../../services/api");
       const data = await rankCandidatesByPost(selectedPostId);
       const results = Array.isArray(data)
         ? data
-        : data?.ranked || data?.candidates || data?.data || data?.results || [];
+        : data?.ranked ||
+          data?.candidates ||
+          data?.data ||
+          data?.results ||
+          [];
+      const job = jobPosts.find(
+        (p) => String(p._id || p.id) === String(selectedPostId),
+      );
+      const title = job?.title || "";
+      const rows = parseRankList(data).map((r) =>
+        normalizeRankRow(r, title, selectedPostId),
+      );
       setRankResults(results);
-      setAiRanked(null);
+
+      setApplicants((prev) => {
+        const rest = prev.filter(
+          (c) => String(c.postId) !== String(selectedPostId),
+        );
+        const ids = new Set(rest.map((c) => c.id));
+        const next = [...rest];
+        for (const r of rows) {
+          if (!ids.has(r.id)) {
+            ids.add(r.id);
+            next.push(r);
+          }
+        }
+        return next;
+      });
+      setToast({ message: "Ranking updated for this post.", type: "success" });
+      setTimeout(() => setToast(null), 3000);
     } catch (err) {
       console.error("Ranking failed:", err);
       setToast({
         message:
-          "AI ranking unavailable. Make sure the backend server is running.",
+          err.message ||
+          "AI ranking failed. Check your connection and HR session.",
         type: "error",
       });
       setTimeout(() => setToast(null), 5000);
@@ -74,18 +118,16 @@ export default function HRCandidates() {
     }
   };
 
-  const baseList = aiRanked
-    ? aiRanked.map((r) => CANDIDATES.find((c) => c.id === r.id)).filter(Boolean)
-    : CANDIDATES;
-
-  // Find the title of the currently selected job (for AI rank + optional filter)
   const selectedJobTitle = selectedPostId
-    ? jobPosts.find((p) => (p._id || p.id) === selectedPostId)?.title || ""
+    ? jobPosts.find((p) => String(p._id || p.id) === String(selectedPostId))
+        ?.title || ""
     : "";
 
-  // Demo table rows use mock role titles; real API job titles rarely match — filtering
-  // by job would hide every row. Only apply job-title filter when using AI-reordered ids.
-  const filterTableByJobTitle = Boolean(aiRanked);
+  const baseList = selectedPostId
+    ? applicants.filter(
+        (c) => String(c.postId) === String(selectedPostId),
+      )
+    : applicants;
 
   const filtered = baseList
     .filter((c) => {
@@ -94,20 +136,19 @@ export default function HRCandidates() {
         !s ||
         c.name.toLowerCase().includes(s) ||
         c.appliedRole.toLowerCase().includes(s) ||
+        (c.email && c.email.toLowerCase().includes(s)) ||
         c.location.toLowerCase().includes(s);
       const matchStatus = filter === "all" || c.status === filter;
-      const matchJob =
-        !filterTableByJobTitle ||
-        !selectedJobTitle ||
-        c.appliedRole.toLowerCase() === selectedJobTitle.toLowerCase();
-      return matchSearch && matchStatus && matchJob;
+      return matchSearch && matchStatus;
     })
     .sort((a, b) => {
-      if (aiRanked) return 0; // already sorted by AI
       if (sortBy === "score") return b.score - a.score;
       if (sortBy === "name") return a.name.localeCompare(b.name);
-      if (sortBy === "date")
-        return new Date(b.appliedDate) - new Date(a.appliedDate);
+      if (sortBy === "date") {
+        const da = a.appliedDate ? new Date(a.appliedDate).getTime() : 0;
+        const db = b.appliedDate ? new Date(b.appliedDate).getTime() : 0;
+        return db - da;
+      }
       return 0;
     });
 
@@ -129,7 +170,6 @@ export default function HRCandidates() {
           flexDirection: "column",
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -155,25 +195,26 @@ export default function HRCandidates() {
               Candidates
             </h1>
             <div style={{ fontSize: 12.5, color: "var(--m2)", marginTop: 2 }}>
-              {filtered.length} shown · {CANDIDATES.length} demo profiles · use job
-              dropdown for &quot;Re-rank with AI&quot;
+              {loading
+                ? "Loading…"
+                : `${applicants.length} from your API · ${filtered.length} shown`}
             </div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button className="btn btn-ghost btn-sm">Export CSV</button>
-            {(aiRanked || rankResults) && (
+            <button type="button" className="btn btn-ghost btn-sm" disabled>
+              Export CSV
+            </button>
+            {rankResults && (
               <button
+                type="button"
                 className="btn btn-ghost btn-sm"
-                onClick={() => {
-                  setAiRanked(null);
-                  setRankResults(null);
-                }}
+                onClick={() => setRankResults(null)}
                 style={{
                   color: "var(--teal)",
                   borderColor: "rgba(30,207,170,0.3)",
                 }}
               >
-                ✓ AI Ranked · Clear
+                Clear rank panel
               </button>
             )}
             <select
@@ -183,11 +224,11 @@ export default function HRCandidates() {
               style={{
                 height: 32,
                 fontSize: 12.5,
-                maxWidth: 170,
+                maxWidth: 190,
                 padding: "0 8px",
               }}
             >
-              <option value="">All Jobs</option>
+              <option value="">All jobs</option>
               {jobPosts.map((p) => (
                 <option key={p._id || p.id} value={p._id || p.id}>
                   {p.title}
@@ -195,6 +236,7 @@ export default function HRCandidates() {
               ))}
             </select>
             <button
+              type="button"
               className="btn btn-primary btn-sm"
               onClick={handleAIRank}
               disabled={ranking}
@@ -206,7 +248,6 @@ export default function HRCandidates() {
         </div>
 
         <div style={{ padding: "20px 32px 0" }}>
-          {/* AI Ranking Results Panel */}
           {rankResults && rankResults.length > 0 && (
             <div
               style={{
@@ -232,9 +273,10 @@ export default function HRCandidates() {
                     fontSize: 13,
                   }}
                 >
-                  🤖 AI-Ranked Candidates
+                  Raw ranking response · {selectedJobTitle || "post"}
                 </span>
                 <button
+                  type="button"
                   className="btn btn-ghost btn-sm"
                   onClick={() => setRankResults(null)}
                   style={{ fontSize: 11 }}
@@ -275,7 +317,6 @@ export default function HRCandidates() {
             </div>
           )}
 
-          {/* Controls */}
           <div
             style={{
               display: "flex",
@@ -317,7 +358,6 @@ export default function HRCandidates() {
             </select>
           </div>
 
-          {/* Status tabs */}
           <div
             style={{
               display: "flex",
@@ -330,6 +370,7 @@ export default function HRCandidates() {
             {statuses.map((s) => (
               <button
                 key={s}
+                type="button"
                 onClick={() => setFilter(s)}
                 style={{
                   padding: "8px 16px",
@@ -356,30 +397,15 @@ export default function HRCandidates() {
                   style={{ marginLeft: 7, fontSize: 11, color: "var(--m3)" }}
                 >
                   {s === "all"
-                    ? baseList.filter(
-                        (c) =>
-                          !filterTableByJobTitle ||
-                          !selectedJobTitle ||
-                          c.appliedRole.toLowerCase() ===
-                            selectedJobTitle.toLowerCase(),
-                      ).length
-                    : baseList.filter(
-                        (c) =>
-                          c.status === s &&
-                          (!filterTableByJobTitle ||
-                            !selectedJobTitle ||
-                            c.appliedRole.toLowerCase() ===
-                              selectedJobTitle.toLowerCase()),
-                      ).length}
+                    ? baseList.length
+                    : baseList.filter((c) => c.status === s).length}
                 </span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Table */}
         <div style={{ flex: 1, padding: "0 32px 40px" }}>
-          {/* Column headers */}
           <div
             style={{
               display: "grid",
@@ -416,117 +442,131 @@ export default function HRCandidates() {
             ))}
           </div>
 
-          {filtered.map((c) => {
-            const daysAgo = Math.floor(
-              (Date.now() - new Date(c.appliedDate)) / 86400000,
-            );
-            return (
-              <div
-                key={c.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "2.5fr 1.5fr 120px 130px 100px 80px",
-                  padding: "14px 16px",
-                  borderBottom: "1px solid var(--b1)",
-                  alignItems: "center",
-                  transition: "background 0.15s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "var(--s1)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  {aiRanked && (
-                    <span
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: "50%",
-                        background: "var(--grad)",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: "#fff",
-                        flexShrink: 0,
-                        marginRight: 6,
-                      }}
-                    >
-                      {aiRanked.find((r) => r.id === c.id)?.rank || "—"}
-                    </span>
-                  )}
-                  <Avatar initials={c.avatar} color={c.avatarColor} size={38} />
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 14.5,
-                        fontWeight: 500,
-                        color: "var(--text)",
-                      }}
-                    >
-                      {c.name}
-                    </div>
-                    <div
-                      style={{ fontSize: 12, color: "var(--m2)", marginTop: 1 }}
-                    >
-                      {c.location} · {c.experience}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 13.5, color: "var(--m1)" }}>
-                    {c.appliedRole}
-                  </div>
+          {!loading && applicants.length === 0 ? (
+            <EmptyState
+              icon="📋"
+              title="No applicants in the pipeline"
+              desc="Post jobs, have candidates apply, then run Re-rank with AI — or check your HR login session."
+            />
+          ) : (
+            filtered.map((c) => {
+              const daysAgo = c.appliedDate
+                ? Math.floor(
+                    (Date.now() - new Date(c.appliedDate)) / 86400000,
+                  )
+                : null;
+              return (
+                <div
+                  key={c.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "2.5fr 1.5fr 120px 130px 100px 80px",
+                    padding: "14px 16px",
+                    borderBottom: "1px solid var(--b1)",
+                    alignItems: "center",
+                    transition: "background 0.15s",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "var(--s1)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
+                >
                   <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 4,
-                      marginTop: 5,
-                    }}
+                    style={{ display: "flex", alignItems: "center", gap: 12 }}
                   >
-                    {c.skills.slice(0, 2).map((s) => (
-                      <span
-                        key={s}
+                    <Avatar
+                      initials={c.avatar}
+                      color={c.avatarColor}
+                      size={38}
+                    />
+                    <div>
+                      <div
                         style={{
-                          padding: "1px 7px",
-                          borderRadius: 4,
-                          background: "var(--b1)",
-                          fontSize: 10.5,
-                          color: "var(--m2)",
+                          fontSize: 14.5,
+                          fontWeight: 500,
+                          color: "var(--text)",
                         }}
                       >
-                        {s}
-                      </span>
-                    ))}
+                        {c.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "var(--m2)",
+                          marginTop: 1,
+                        }}
+                      >
+                        {c.location} · {c.experience}
+                      </div>
+                    </div>
                   </div>
+                  <div>
+                    <div style={{ fontSize: 13.5, color: "var(--m1)" }}>
+                      {c.appliedRole}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 4,
+                        marginTop: 5,
+                      }}
+                    >
+                      {(c.skills || []).slice(0, 2).map((sk) => (
+                        <span
+                          key={sk}
+                          style={{
+                            padding: "1px 7px",
+                            borderRadius: 4,
+                            background: "var(--b1)",
+                            fontSize: 10.5,
+                            color: "var(--m2)",
+                          }}
+                        >
+                          {sk}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <ScoreBadge score={c.score} showBar />
+                  <StatusPill status={c.status} />
+                  <div style={{ fontSize: 12.5, color: "var(--m2)" }}>
+                    {daysAgo == null
+                      ? "—"
+                      : daysAgo === 0
+                        ? "Today"
+                        : `${daysAgo}d ago`}
+                  </div>
+                  <Link
+                    to={`/hr/candidates/${encodeURIComponent(c.id)}`}
+                    state={{ applicant: c }}
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem(
+                          `hr_applicant_${c.id}`,
+                          JSON.stringify(c),
+                        );
+                      } catch (_) {}
+                    }}
+                    style={{
+                      fontSize: 12.5,
+                      color: "var(--blue)",
+                      textDecoration: "none",
+                      fontWeight: 500,
+                    }}
+                  >
+                    View →
+                  </Link>
                 </div>
-                <ScoreBadge score={c.score} showBar />
-                <StatusPill status={c.status} />
-                <div style={{ fontSize: 12.5, color: "var(--m2)" }}>
-                  {daysAgo === 0 ? "Today" : `${daysAgo}d ago`}
-                </div>
-                <Link
-                  to={`/hr/candidates/${c.id}`}
-                  style={{
-                    fontSize: 12.5,
-                    color: "var(--blue)",
-                    textDecoration: "none",
-                    fontWeight: 500,
-                  }}
-                >
-                  View →
-                </Link>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
 
-          {filtered.length === 0 && (
+          {!loading && filtered.length === 0 && applicants.length > 0 && (
             <div style={{ textAlign: "center", padding: "60px 24px" }}>
               <div style={{ fontSize: 36, marginBottom: 16 }}>👤</div>
               <div
@@ -537,10 +577,10 @@ export default function HRCandidates() {
                   marginBottom: 8,
                 }}
               >
-                No candidates found
+                No candidates in this filter
               </div>
               <div style={{ color: "var(--m1)", fontSize: 14 }}>
-                Try adjusting your filters
+                Try &quot;All jobs&quot; or another status tab
               </div>
             </div>
           )}

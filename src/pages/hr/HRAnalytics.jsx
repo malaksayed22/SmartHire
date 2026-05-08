@@ -13,6 +13,10 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import {
+  fetchHRJobsAndRankedApplicants,
+  buildWeeklySeries,
+} from "../../services/hrApplicants";
 
 const STATUS_PIE_COLORS = {
   new: "#5B8EF8",
@@ -47,101 +51,6 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-function parseRankList(data) {
-  if (Array.isArray(data)) return data;
-  return (
-    data?.ranked || data?.candidates || data?.data || data?.results || []
-  );
-}
-
-function normalizeStatus(raw) {
-  if (raw == null || raw === "") return "new";
-  const s = String(raw).toLowerCase().trim().replace(/[\s-]+/g, "_");
-  if (s.includes("shortlist")) return "shortlisted";
-  if (s.includes("interview")) return "interview";
-  if (s.includes("hire")) return "hired";
-  if (s.includes("reject")) return "rejected";
-  if (s.includes("review")) return "reviewing";
-  if (s.includes("new") || s.includes("apply")) return "new";
-  return "new";
-}
-
-function rowToCandidate(row, jobTitle) {
-  const name =
-    row.name || row.candidate_name || row.full_name || "Candidate";
-  const score = Number(row.match_score ?? row.score ?? row.ai_score ?? 0);
-  const email = row.email || "";
-  const status = normalizeStatus(
-    row.status ?? row.application_status ?? row.stage ?? row.pipeline_status,
-  );
-  const id = String(
-    row._id ?? row.id ?? row.application_id ?? `${email}:${jobTitle}`,
-  );
-  const location = row.location || row.city || "—";
-  const appliedRole =
-    jobTitle || row.job_title || row.post_title || row.title || "—";
-  const appliedDate =
-    row.created_at ||
-    row.applied_at ||
-    row.application_date ||
-    row.submitted_at ||
-    null;
-  const initials =
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase() || "?";
-  return {
-    id,
-    name,
-    email,
-    score,
-    status,
-    location,
-    appliedRole,
-    appliedDate,
-    avatar: initials,
-  };
-}
-
-function dedupeByEmail(cands) {
-  const m = new Map();
-  for (const c of cands) {
-    const key = (c.email || c.id).toLowerCase();
-    const prev = m.get(key);
-    if (!prev || c.score > prev.score) m.set(key, c);
-  }
-  return [...m.values()];
-}
-
-function buildWeeklySeries(candidates) {
-  const MSW = 7 * 86400000;
-  const now = Date.now();
-  const weeks = Array.from({ length: 8 }, (_, i) => ({
-    week: i === 7 ? "This week" : `${8 - i}w ago`,
-    applications: 0,
-    shortlisted: 0,
-  }));
-  let any = false;
-  for (const c of candidates) {
-    if (!c.appliedDate) continue;
-    const t = new Date(c.appliedDate).getTime();
-    if (Number.isNaN(t)) continue;
-    const ageWeeks = Math.floor((now - t) / MSW);
-    if (ageWeeks < 0 || ageWeeks > 7) continue;
-    any = true;
-    const bin = 7 - ageWeeks;
-    weeks[bin].applications += 1;
-    if (["shortlisted", "interview", "hired"].includes(c.status))
-      weeks[bin].shortlisted += 1;
-  }
-  if (!any) return null;
-  return weeks;
-}
-
 export default function HRAnalytics() {
   const [jobs, setJobs] = useState([]);
   const [candidates, setCandidates] = useState([]);
@@ -154,36 +63,11 @@ export default function HRAnalytics() {
       setLoading(true);
       setError(null);
       try {
-        const { getHRJobs, normalizeJob, rankCandidatesByPost } = await import(
-          "../../services/api"
-        );
-        const raw = await getHRJobs();
-        const list = Array.isArray(raw)
-          ? raw
-          : raw.posts || raw.data || raw.jobs || [];
-        const normalized = list.map(normalizeJob);
+        const { jobs: j, applicants } =
+          await fetchHRJobsAndRankedApplicants(24);
         if (cancelled) return;
-        setJobs(normalized);
-
-        const toRank = normalized
-          .filter((j) => (j.applicants || 0) > 0 || normalized.length <= 12)
-          .slice(0, 24);
-        const rankedLists = await Promise.all(
-          toRank.map(async (job) => {
-            const id = job._id || job.id;
-            if (!id) return [];
-            try {
-              const data = await rankCandidatesByPost(id);
-              const rows = parseRankList(data);
-              return rows.map((r) => rowToCandidate(r, job.title));
-            } catch {
-              return [];
-            }
-          }),
-        );
-        if (cancelled) return;
-        const flat = dedupeByEmail(rankedLists.flat());
-        setCandidates(flat);
+        setJobs(j);
+        setCandidates(applicants);
       } catch (e) {
         if (!cancelled) setError(e.message || "Failed to load analytics");
       } finally {

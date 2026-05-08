@@ -70,7 +70,7 @@ export default function JobBoard() {
           selectedTypes.some((t) => j.type.includes(t));
         return matchSearch && matchDept && matchType;
       }),
-    [search, dept, selectedTypes],
+    [jobs, search, dept, selectedTypes],
   );
 
   return (

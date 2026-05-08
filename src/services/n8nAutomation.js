@@ -78,13 +78,35 @@ async function postJson(url, body) {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
   });
+  // One read; n8n often returns 200/204 with an empty body (still OK for automation).
+  const text = await res.text().catch(() => "");
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(text?.slice(0, 200) || `Webhook HTTP ${res.status}`);
   }
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return res.json();
-  return {};
+  const trimmed = (text || "").trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return {};
+  }
+}
+
+/** Fire-and-forget friendly: tolerate empty bodies & legacy parse quirks after HTTP success. */
+async function postWebhook(url, body) {
+  try {
+    await postJson(url, body);
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (
+      err instanceof SyntaxError ||
+      /unexpected end of json input/i.test(msg)
+    ) {
+      console.warn("n8n webhook: ignoring empty/non-JSON success body", err);
+    } else {
+      throw err;
+    }
+  }
 }
 
 /**
@@ -107,7 +129,7 @@ export async function notifyCandidateStatusChanged(detail) {
     timestamp: new Date().toISOString(),
     ...detail,
   };
-  await postJson(url, body);
+  await postWebhook(url, body);
   return { ok: true };
 }
 
@@ -126,7 +148,7 @@ export async function notifyApplicationSubmitted(detail) {
     timestamp: new Date().toISOString(),
     ...detail,
   };
-  await postJson(url, body);
+  await postWebhook(url, body);
   return { ok: true };
 }
 
@@ -176,6 +198,6 @@ export async function notifyN8nTest(workflowId, extra = {}) {
     ...extra,
   };
 
-  await postJson(url, body);
+  await postWebhook(url, body);
   return { ok: true };
 }

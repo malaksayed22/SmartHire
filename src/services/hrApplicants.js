@@ -3,9 +3,23 @@
  */
 import { getHRJobs, normalizeJob, rankCandidatesByPost } from "./api";
 
+const RANK_FETCH_CONCURRENCY = 8;
+
 export function parseRankList(data) {
   if (Array.isArray(data)) return data;
-  return data?.ranked || data?.candidates || data?.data || data?.results || [];
+  return (
+    data?.ranked ||
+    data?.candidates ||
+    data?.ranked_candidates ||
+    data?.candidates_ranked ||
+    data?.applications ||
+    data?.applicants ||
+    data?.data ||
+    data?.results ||
+    data?.items ||
+    data?.list ||
+    []
+  );
 }
 
 /** Normalize post/job id for comparisons (strings, trimming, Mongo extended JSON) */
@@ -136,7 +150,17 @@ export function toSkillsArray(v) {
  */
 export function normalizeRankRow(row, jobTitle, postId) {
   const name = row.name || row.candidate_name || row.full_name || "Candidate";
-  const email = row.email || "";
+  const cand = row.candidate && typeof row.candidate === "object" ? row.candidate : null;
+  const email =
+    row.email ||
+    row.candidate_email ||
+    row.candidateEmail ||
+    row.user_email ||
+    row.contact_email ||
+    row.applicant_email ||
+    row.applicantEmail ||
+    (cand && (cand.email || cand.user_email)) ||
+    "";
   const score = Number(row.match_score ?? row.score ?? row.ai_score ?? 0);
   const status = normalizeStatus(
     row.status ??
@@ -215,10 +239,10 @@ export function normalizeRankRow(row, jobTitle, postId) {
 }
 
 /**
- * @param {number} maxPosts - max concurrent rank-candidates calls
+ * @param {number} maxPosts - max concurrent rank-candidates calls (all jobs by default; cap if needed)
  * @returns {{ jobs: ReturnType<normalizeJob>[], applicants: ReturnType<normalizeRankRow>[] }}
  */
-export async function fetchHRJobsAndRankedApplicants(maxPosts = 24) {
+export async function fetchHRJobsAndRankedApplicants(maxPosts = 500) {
   const raw = await getHRJobs();
   const list = Array.isArray(raw)
     ? raw
@@ -227,20 +251,25 @@ export async function fetchHRJobsAndRankedApplicants(maxPosts = 24) {
 
   const toRank = jobs.slice(0, maxPosts);
 
-  const rankedLists = await Promise.all(
-    toRank.map(async (job) => {
-      const pid = job._id || job.id;
-      if (!pid) return [];
-      try {
-        const data = await rankCandidatesByPost(pid);
-        return parseRankList(data).map((r) =>
-          normalizeRankRow(r, job.title, pid),
-        );
-      } catch {
-        return [];
-      }
-    }),
-  );
+  const rankedLists = [];
+  for (let i = 0; i < toRank.length; i += RANK_FETCH_CONCURRENCY) {
+    const batch = toRank.slice(i, i + RANK_FETCH_CONCURRENCY);
+    const batchRows = await Promise.all(
+      batch.map(async (job) => {
+        const pid = job._id || job.id;
+        if (!pid) return [];
+        try {
+          const data = await rankCandidatesByPost(pid);
+          return parseRankList(data).map((r) =>
+            normalizeRankRow(r, job.title, pid),
+          );
+        } catch {
+          return [];
+        }
+      }),
+    );
+    rankedLists.push(...batchRows);
+  }
 
   const countByPost = new Map();
   toRank.forEach((job, i) => {
@@ -274,22 +303,27 @@ export async function fetchHRJobsAndRankedApplicants(maxPosts = 24) {
  * When job posts omit applicant counts, fill them from rank-candidates list lengths
  * (same source as the Candidates page). Caps concurrent posts via maxPosts.
  */
-export async function mergeApplicantCountsFromRanking(jobs, maxPosts = 24) {
+export async function mergeApplicantCountsFromRanking(jobs, maxPosts = 500) {
   if (!jobs?.length) return jobs || [];
   const slice = jobs.slice(0, maxPosts);
-  const pairs = await Promise.all(
-    slice.map(async (job) => {
-      const pid = job._id || job.id;
-      if (!pid) return [null, null];
-      try {
-        const data = await rankCandidatesByPost(pid);
-        const n = parseRankList(data).length;
-        return [canonicalPostId(pid), n];
-      } catch {
-        return [canonicalPostId(pid), null];
-      }
-    }),
-  );
+  const pairs = [];
+  for (let i = 0; i < slice.length; i += RANK_FETCH_CONCURRENCY) {
+    const batch = slice.slice(i, i + RANK_FETCH_CONCURRENCY);
+    const batchPairs = await Promise.all(
+      batch.map(async (job) => {
+        const pid = job._id || job.id;
+        if (!pid) return [null, null];
+        try {
+          const data = await rankCandidatesByPost(pid);
+          const n = parseRankList(data).length;
+          return [canonicalPostId(pid), n];
+        } catch {
+          return [canonicalPostId(pid), null];
+        }
+      }),
+    );
+    pairs.push(...batchPairs);
+  }
   const byPost = new Map(pairs.filter(([id]) => id).map(([id, n]) => [id, n]));
 
   return jobs.map((job) => {

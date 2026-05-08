@@ -66,7 +66,7 @@ export default function HRAnalytics() {
       setError(null);
       try {
         const { jobs: j, applicants } =
-          await fetchHRJobsAndRankedApplicants(24);
+          await fetchHRJobsAndRankedApplicants();
         if (cancelled) return;
         setJobs(j);
         setCandidates(applyApplicantPipelineMeta(applicants));

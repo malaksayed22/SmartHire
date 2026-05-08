@@ -40,7 +40,7 @@ export default function HRCandidates() {
     setLoading(true);
     try {
       const { jobs, applicants: a } =
-        await fetchHRJobsAndRankedApplicants(24);
+        await fetchHRJobsAndRankedApplicants();
       setJobPosts(jobs);
       setApplicants(applyApplicantPipelineMeta(a));
     } catch (e) {

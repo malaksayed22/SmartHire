@@ -46,7 +46,7 @@ export default function HRJobs() {
         if (cancelled) return;
         const list = Array.isArray(data) ? data : [];
         const normalized = list.map(normalizeJob);
-        const merged = await mergeApplicantCountsFromRanking(normalized, 24);
+        const merged = await mergeApplicantCountsFromRanking(normalized);
         if (!cancelled) setJobs(merged);
       } catch {
         if (!cancelled) setJobs([]);
@@ -104,7 +104,7 @@ export default function HRJobs() {
       const fresh = await getHRJobs();
       const list = Array.isArray(fresh) ? fresh : [];
       const normalized = list.map(normalizeJob);
-      setJobs(await mergeApplicantCountsFromRanking(normalized, 24));
+      setJobs(await mergeApplicantCountsFromRanking(normalized));
     } catch {
       // Fallback: add locally if API fails
       const newJob = {
@@ -170,7 +170,7 @@ export default function HRJobs() {
       );
       const fresh = await getHRJobs();
       const list = Array.isArray(fresh) ? fresh : [];
-      setJobs(await mergeApplicantCountsFromRanking(list.map(normalizeJob), 24));
+      setJobs(await mergeApplicantCountsFromRanking(list.map(normalizeJob)));
     } catch {
       setJobs((prev) =>
         prev.map((j) =>
@@ -194,7 +194,7 @@ export default function HRJobs() {
       const fresh = await getHRJobs();
       const list = Array.isArray(fresh) ? fresh : [];
       if (list.length)
-        setJobs(await mergeApplicantCountsFromRanking(list.map(normalizeJob), 24));
+        setJobs(await mergeApplicantCountsFromRanking(list.map(normalizeJob)));
       else setJobs((prev) => prev.filter((j) => j.id !== jobId));
     } catch {
       setJobs((prev) => prev.filter((j) => j.id !== jobId));

@@ -298,10 +298,43 @@ export async function updateHRApplicationStatus({
 
 // ── Applications ──────────────────────────────────────────────────────────────
 
-export async function submitApplication(postId, file) {
+/**
+ * @param {string} postId
+ * @param {File} file
+ * @param {object} [meta] - contact fields many Railway/FastAPI backends expect alongside the file
+ */
+export async function submitApplication(postId, file, meta = {}) {
   const form = new FormData();
   form.append("post_id", postId);
   form.append("file", file);
+  const m = meta && typeof meta === "object" ? meta : {};
+  const name = String(m.name ?? "").trim();
+  const email = String(m.email ?? "").trim();
+  const phone = String(m.phone ?? "").trim();
+  const linkedin = String(m.linkedin ?? "").trim();
+  const cover = String(m.coverLetter ?? m.cover ?? "").trim();
+
+  if (name) {
+    form.append("name", name);
+    form.append("full_name", name);
+    form.append("candidate_name", name);
+  }
+  if (email) {
+    form.append("email", email);
+    form.append("candidate_email", email);
+  }
+  if (phone) {
+    form.append("phone", phone);
+    form.append("phone_number", phone);
+  }
+  if (linkedin) {
+    form.append("linkedin", linkedin);
+    form.append("linkedin_url", linkedin);
+  }
+  if (cover) {
+    form.append("cover_letter", cover);
+  }
+
   const res = await apiFetch(
     `${BASE_URL}/candidate/submit-application`,
     opts("POST", form),

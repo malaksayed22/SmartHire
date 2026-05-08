@@ -69,7 +69,7 @@ export default function HRDashboard() {
       setLoadError(null);
       try {
         const { jobs: j, applicants: a } =
-          await fetchHRJobsAndRankedApplicants(24);
+          await fetchHRJobsAndRankedApplicants();
         if (!cancelled) {
           setJobs(j);
           setApplicants(applyApplicantPipelineMeta(a));

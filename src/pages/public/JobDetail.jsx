@@ -99,7 +99,13 @@ export default function JobDetail() {
         // Real DB job — persist application first, score as a best-effort enhancement.
         const { scoreResumeByJob, submitApplication } =
           await import("../../services/api");
-        await submitApplication(job._id, file);
+        await submitApplication(job._id, file, {
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          linkedin: form.linkedin,
+          coverLetter: form.cover,
+        });
         try {
           const { notifyApplicationSubmitted } = await import(
             "../../services/n8nAutomation"

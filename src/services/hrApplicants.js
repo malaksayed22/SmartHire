@@ -12,11 +12,48 @@ export function normalizeStatus(raw) {
   if (raw == null || raw === "") return "new";
   const s = String(raw).toLowerCase().trim().replace(/[\s-]+/g, "_");
   if (s.includes("shortlist")) return "shortlisted";
-  if (s.includes("interview")) return "interview";
-  if (s.includes("hire")) return "hired";
-  if (s.includes("reject")) return "rejected";
-  if (s.includes("review")) return "reviewing";
-  if (s.includes("new") || s.includes("apply")) return "new";
+  if (
+    s.includes("hired") ||
+    s.includes("onboard") ||
+    (s.includes("offer") && s.includes("accept"))
+  )
+    return "hired";
+  if (
+    s.includes("reject") ||
+    s.includes("declin") ||
+    s.includes("not_selected") ||
+    s.includes("unsuccessful") ||
+    s.includes("withdraw")
+  )
+    return "rejected";
+  if (
+    s.includes("interview") ||
+    s.includes("recruiter_call") ||
+    (s.includes("phone") && s.includes("interview")) ||
+    s.includes("onsite")
+  )
+    return "interview";
+  if (
+    s.includes("review") ||
+    s.includes("screening") ||
+    s.includes("screened") ||
+    s.includes("in_progress") ||
+    s.includes("consideration") ||
+    s.includes("asses") ||
+    s.includes("evaluat")
+  )
+    return "reviewing";
+  if (
+    s.includes("new") ||
+    s.includes("apply") ||
+    s.includes("applied") ||
+    s.includes("submit") ||
+    s.includes("received") ||
+    s.includes("pending") ||
+    s.includes("upload") ||
+    s === "open"
+  )
+    return "new";
   return "new";
 }
 
@@ -42,7 +79,13 @@ export function normalizeRankRow(row, jobTitle, postId) {
   const email = row.email || "";
   const score = Number(row.match_score ?? row.score ?? row.ai_score ?? 0);
   const status = normalizeStatus(
-    row.status ?? row.application_status ?? row.stage ?? row.pipeline_status,
+    row.status ??
+      row.application_status ??
+      row.application?.status ??
+      row.stage ??
+      row.pipeline_status ??
+      row.hiring_stage ??
+      row.state,
   );
   const uid =
     row._id ?? row.application_id ?? row.id ?? `${postId}:${email || name}`;
@@ -128,6 +171,22 @@ export async function fetchHRJobsAndRankedApplicants(maxPosts = 24) {
     }),
   );
 
+  const countByPost = new Map();
+  toRank.forEach((job, i) => {
+    const pid = job._id || job.id;
+    if (!pid) return;
+    countByPost.set(String(pid), rankedLists[i].length);
+  });
+  const jobsWithCounts = jobs.map((job) => {
+    const pid = String(job._id || job.id);
+    const fromRank = countByPost.get(pid);
+    const apiN = Number(job.applicants) || 0;
+    if (fromRank != null && fromRank > 0) {
+      return { ...job, applicants: Math.max(apiN, fromRank) };
+    }
+    return job;
+  });
+
   const flat = rankedLists.flat();
   const seen = new Set();
   const applicants = [];
@@ -137,7 +196,40 @@ export async function fetchHRJobsAndRankedApplicants(maxPosts = 24) {
     applicants.push(a);
   }
 
-  return { jobs, applicants };
+  return { jobs: jobsWithCounts, applicants };
+}
+
+/**
+ * When job posts omit applicant counts, fill them from rank-candidates list lengths
+ * (same source as the Candidates page). Caps concurrent posts via maxPosts.
+ */
+export async function mergeApplicantCountsFromRanking(jobs, maxPosts = 24) {
+  if (!jobs?.length) return jobs || [];
+  const slice = jobs.slice(0, maxPosts);
+  const pairs = await Promise.all(
+    slice.map(async (job) => {
+      const pid = job._id || job.id;
+      if (!pid) return [null, null];
+      try {
+        const data = await rankCandidatesByPost(pid);
+        const n = parseRankList(data).length;
+        return [String(pid), n];
+      } catch {
+        return [String(pid), null];
+      }
+    }),
+  );
+  const byPost = new Map(pairs.filter(([id]) => id).map(([id, n]) => [id, n]));
+
+  return jobs.map((job) => {
+    const pid = String(job._id || job.id);
+    const rankedN = byPost.get(pid);
+    const apiN = Number(job.applicants) || 0;
+    if (rankedN != null && rankedN > 0) {
+      return { ...job, applicants: Math.max(apiN, rankedN) };
+    }
+    return job;
+  });
 }
 
 /** 8-week buckets when appliedDate is present */

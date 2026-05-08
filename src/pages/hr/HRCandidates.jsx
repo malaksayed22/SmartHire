@@ -13,6 +13,7 @@ import {
   fetchHRJobsAndRankedApplicants,
   parseRankList,
   normalizeRankRow,
+  normalizeStatus,
 } from "../../services/hrApplicants";
 import { rankCandidatesByPost } from "../../services/api";
 
@@ -129,16 +130,19 @@ export default function HRCandidates() {
       )
     : applicants;
 
+  const safe = (v) => String(v ?? "").toLowerCase();
+
   const filtered = baseList
     .filter((c) => {
-      const s = search.toLowerCase();
+      const q = search.toLowerCase();
       const matchSearch =
-        !s ||
-        c.name.toLowerCase().includes(s) ||
-        c.appliedRole.toLowerCase().includes(s) ||
-        (c.email && c.email.toLowerCase().includes(s)) ||
-        c.location.toLowerCase().includes(s);
-      const matchStatus = filter === "all" || c.status === filter;
+        !q ||
+        safe(c.name).includes(q) ||
+        safe(c.appliedRole).includes(q) ||
+        safe(c.email).includes(q) ||
+        safe(c.location).includes(q);
+      const canon = normalizeStatus(c.status);
+      const matchStatus = filter === "all" || canon === filter;
       return matchSearch && matchStatus;
     })
     .sort((a, b) => {
@@ -398,7 +402,8 @@ export default function HRCandidates() {
                 >
                   {s === "all"
                     ? baseList.length
-                    : baseList.filter((c) => c.status === s).length}
+                    : baseList.filter((c) => normalizeStatus(c.status) === s)
+                        .length}
                 </span>
               </button>
             ))}
@@ -533,7 +538,7 @@ export default function HRCandidates() {
                     </div>
                   </div>
                   <ScoreBadge score={c.score} showBar />
-                  <StatusPill status={c.status} />
+                  <StatusPill status={normalizeStatus(c.status)} />
                   <div style={{ fontSize: 12.5, color: "var(--m2)" }}>
                     {daysAgo == null
                       ? "—"

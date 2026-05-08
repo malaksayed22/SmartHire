@@ -44,6 +44,48 @@ async function extractError(res) {
   }
 }
 
+/** Best-effort applicant count from various backend field names */
+function pickApplicantCount(j) {
+  if (!j || typeof j !== "object") return 0;
+  const tryKeys = [
+    "applications_count",
+    "application_count",
+    "applicationsCount",
+    "applicants_count",
+    "num_applicants",
+    "total_applications",
+    "totalApplicants",
+    "applicant_count",
+    "resume_count",
+    "submissions_count",
+    "submitted_count",
+    "applications",
+    "applicants",
+  ];
+  for (const k of tryKeys) {
+    const v = j[k];
+    if (v == null || v === "") continue;
+    const n = Number(v);
+    if (!Number.isNaN(n) && n >= 0) return n;
+  }
+  const nested =
+    j.stats ||
+    j.metrics ||
+    j.counters ||
+    j.meta ||
+    j.summary ||
+    j.application_stats;
+  if (nested && typeof nested === "object") {
+    for (const k of tryKeys) {
+      const v = nested[k];
+      if (v == null || v === "") continue;
+      const n = Number(v);
+      if (!Number.isNaN(n) && n >= 0) return n;
+    }
+  }
+  return 0;
+}
+
 /** Normalize API job shape → UI-compatible shape */
 export function normalizeJob(j) {
   const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -76,7 +118,7 @@ export function normalizeJob(j) {
     posted: j.created_at
       ? j.created_at.split("T")[0]
       : j.posted || new Date().toISOString().split("T")[0],
-    applicants: j.applications_count || j.applicants || 0,
+    applicants: pickApplicantCount(j),
     status:
       j.is_active != null
         ? j.is_active

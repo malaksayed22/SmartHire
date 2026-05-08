@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import HRSidebar from "../../components/HRSidebar";
 import { DeptTag, Toast } from "../../components/UI";
-import { JOBS, CANDIDATES } from "../../data/mock";
 
 export default function HRJobs() {
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [editJob, setEditJob] = useState(null);
   const [editForm, setEditForm] = useState({
     title: "",
@@ -29,18 +29,33 @@ export default function HRJobs() {
     requirements: "",
     skills: "",
   });
-  const [jobs, setJobs] = useState(JOBS);
+  const [jobs, setJobs] = useState([]);
 
-  // Fetch real jobs from backend on mount
+  // Fetch real jobs from backend on mount (no mock flash; merge counts from ranking API)
   useEffect(() => {
+    let cancelled = false;
     (async () => {
+      setLoading(true);
       try {
         const { getHRJobs, normalizeJob } = await import("../../services/api");
+        const { mergeApplicantCountsFromRanking } = await import(
+          "../../services/hrApplicants"
+        );
         const data = await getHRJobs();
-        if (Array.isArray(data))
-          setJobs(data.length ? data.map(normalizeJob) : []);
-      } catch {}
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data : [];
+        const normalized = list.map(normalizeJob);
+        const merged = await mergeApplicantCountsFromRanking(normalized, 24);
+        if (!cancelled) setJobs(merged);
+      } catch {
+        if (!cancelled) setJobs([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Close kebab menu on outside click
@@ -82,9 +97,13 @@ export default function HRJobs() {
         employment_type: form.type.toLowerCase().replace(" ", "-"),
         work_mode,
       });
-      // Refresh list from API
+      const { mergeApplicantCountsFromRanking } = await import(
+        "../../services/hrApplicants"
+      );
       const fresh = await getHRJobs();
-      if (Array.isArray(fresh)) setJobs(fresh.map(normalizeJob));
+      const list = Array.isArray(fresh) ? fresh : [];
+      const normalized = list.map(normalizeJob);
+      setJobs(await mergeApplicantCountsFromRanking(normalized, 24));
     } catch {
       // Fallback: add locally if API fails
       const newJob = {
@@ -145,8 +164,12 @@ export default function HRJobs() {
         employment_type: editForm.type.toLowerCase().replace(" ", "-"),
         work_mode,
       });
+      const { mergeApplicantCountsFromRanking } = await import(
+        "../../services/hrApplicants"
+      );
       const fresh = await getHRJobs();
-      if (Array.isArray(fresh)) setJobs(fresh.map(normalizeJob));
+      const list = Array.isArray(fresh) ? fresh : [];
+      setJobs(await mergeApplicantCountsFromRanking(list.map(normalizeJob), 24));
     } catch {
       setJobs((prev) =>
         prev.map((j) =>
@@ -164,8 +187,13 @@ export default function HRJobs() {
       const { deleteJobPost, getHRJobs, normalizeJob } =
         await import("../../services/api");
       await deleteJobPost(jobId);
+      const { mergeApplicantCountsFromRanking } = await import(
+        "../../services/hrApplicants"
+      );
       const fresh = await getHRJobs();
-      if (Array.isArray(fresh)) setJobs(fresh.map(normalizeJob));
+      const list = Array.isArray(fresh) ? fresh : [];
+      if (list.length)
+        setJobs(await mergeApplicantCountsFromRanking(list.map(normalizeJob), 24));
       else setJobs((prev) => prev.filter((j) => j.id !== jobId));
     } catch {
       setJobs((prev) => prev.filter((j) => j.id !== jobId));
@@ -173,6 +201,15 @@ export default function HRJobs() {
     setToast({ message: "Job deleted.", type: "success" });
     setTimeout(() => setToast(null), 3000);
   };
+
+  const activeCount = jobs.filter((j) => j.status === "active").length;
+  const totalApplicants = jobs.reduce(
+    (a, j) => a + (Number(j.applicants) || 0),
+    0,
+  );
+  const avgPerRole = jobs.length
+    ? Math.round(totalApplicants / jobs.length)
+    : 0;
 
   return (
     <div
@@ -217,8 +254,9 @@ export default function HRJobs() {
               Job Posts
             </h1>
             <div style={{ fontSize: 12.5, color: "var(--m2)", marginTop: 2 }}>
-              {jobs.filter((j) => j.status === "active").length} active ·{" "}
-              {jobs.length} total
+              {loading
+                ? "Loading…"
+                : `${activeCount} active · ${jobs.length} total`}
             </div>
           </div>
           <button
@@ -242,19 +280,17 @@ export default function HRJobs() {
             {[
               {
                 label: "Active Roles",
-                value: jobs.filter((j) => j.status === "active").length,
+                value: loading ? "…" : activeCount,
                 color: "#5B8EF8",
               },
               {
                 label: "Total Applicants",
-                value: jobs.reduce((a, j) => a + j.applicants, 0),
+                value: loading ? "…" : totalApplicants,
                 color: "#1ECFAA",
               },
               {
                 label: "Avg. Per Role",
-                value: Math.round(
-                  jobs.reduce((a, j) => a + j.applicants, 0) / jobs.length,
-                ),
+                value: loading ? "…" : avgPerRole,
                 color: "#8B70F5",
               },
             ].map((s, i) => (
@@ -349,7 +385,30 @@ export default function HRJobs() {
                 </div>
               ))}
             </div>
-            {jobs.map((job) => {
+            {loading ? (
+              <div
+                style={{
+                  padding: 48,
+                  textAlign: "center",
+                  color: "var(--m2)",
+                  fontSize: 14,
+                }}
+              >
+                Loading job posts…
+              </div>
+            ) : jobs.length === 0 ? (
+              <div
+                style={{
+                  padding: 48,
+                  textAlign: "center",
+                  color: "var(--m2)",
+                  fontSize: 14,
+                }}
+              >
+                No job posts yet. Create one with &quot;+ Post New Job&quot;.
+              </div>
+            ) : (
+              jobs.map((job) => {
               const daysAgo = Math.floor(
                 (Date.now() - new Date(job.posted)) / 86400000,
               );
@@ -546,7 +605,8 @@ export default function HRJobs() {
                   </div>
                 </div>
               );
-            })}
+            })
+            )}
           </div>
         </div>
       </main>

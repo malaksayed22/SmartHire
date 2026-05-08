@@ -260,8 +260,9 @@ export async function deleteJobPost(id) {
 }
 
 export async function rankCandidatesByPost(postId) {
+  const q = encodeURIComponent(String(postId ?? "").trim());
   const res = await apiFetch(
-    `${BASE_URL}/hr/rank-candidates?post_id=${encodeURIComponent(postId)}`,
+    `${BASE_URL}/hr/rank-candidates?post_id=${q}&job_id=${q}`,
     { credentials: "include" },
   );
   if (!res.ok) throw new Error(await extractError(res));
@@ -305,7 +306,9 @@ export async function updateHRApplicationStatus({
  */
 export async function submitApplication(postId, file, meta = {}) {
   const form = new FormData();
-  form.append("post_id", postId);
+  const pid = String(postId ?? "").trim();
+  form.append("post_id", pid);
+  form.append("job_id", pid);
   form.append("file", file);
   const m = meta && typeof meta === "object" ? meta : {};
   const name = String(m.name ?? "").trim();

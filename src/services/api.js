@@ -234,6 +234,17 @@ export async function submitApplication(postId, file) {
   return res.json();
 }
 
+export async function getCandidateApplications() {
+  const res = await apiFetch(`${BASE_URL}/candidate/my-applications`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(await extractError(res));
+  const data = await res.json();
+  return Array.isArray(data)
+    ? data
+    : data.applications || data.data || data.results || data.items || [];
+}
+
 export async function scoreResumeByJob(jobId, file) {
   const form = new FormData();
   form.append("job_id", jobId);

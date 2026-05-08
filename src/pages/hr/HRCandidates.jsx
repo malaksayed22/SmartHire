@@ -25,11 +25,8 @@ export default function HRCandidates() {
           : (raw.posts || []).map(normalizeJob);
         if (posts.length > 0) {
           setJobPosts(posts);
-          // Leave selectedPostId as "" (All Jobs) — user picks explicitly
         } else {
-          // Fall back to mock jobs so the UI is always usable
-          setJobPosts(MOCK_JOBS);
-          // Leave selectedPostId as "" (All Jobs)
+          setJobPosts([]);
         }
       } catch {
         // Backend unreachable — use mock jobs so UI stays functional

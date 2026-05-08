@@ -24,20 +24,27 @@ export function AuthProvider({ children }) {
       if (!candidateUser) return;
 
       try {
-        const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim() || "/api";
-        const res = await fetch(`${BASE_URL}/candidate/my-applications`, {
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          throw new Error("candidate session is not active");
-        }
+        const { getCandidateApplications } = await import("../services/api");
+        await getCandidateApplications();
       } catch {
         setCandidateUser(null);
         localStorage.removeItem("sh_cand_user");
       }
     })();
   }, [candidateUser]);
+
+  useEffect(() => {
+    (async () => {
+      if (!hrUser) return;
+      try {
+        const { getHRJobs } = await import("../services/api");
+        await getHRJobs();
+      } catch {
+        setHrUser(null);
+        localStorage.removeItem("sh_hr_user");
+      }
+    })();
+  }, [hrUser]);
 
   const deriveNameFromEmail = (email) => {
     const local = (email || "").split("@")[0];

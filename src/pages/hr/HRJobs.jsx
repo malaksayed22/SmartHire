@@ -37,8 +37,8 @@ export default function HRJobs() {
       try {
         const { getHRJobs, normalizeJob } = await import("../../services/api");
         const data = await getHRJobs();
-        if (Array.isArray(data) && data.length > 0)
-          setJobs(data.map(normalizeJob));
+        if (Array.isArray(data))
+          setJobs(data.length ? data.map(normalizeJob) : []);
       } catch {}
     })();
   }, []);

@@ -96,28 +96,23 @@ export default function JobDetail() {
     setAiError(null);
     try {
       if (job._id) {
-        // Real DB job — score & submit via main backend
+        // Real DB job — persist application first, score as a best-effort enhancement.
         const { scoreResumeByJob, submitApplication } =
           await import("../../services/api");
-        const scored = await scoreResumeByJob(job._id, file);
-        const raw = unwrapScorePayload(scored);
-        setAiResult({
-          score: raw.score ?? raw.match_score ?? raw.percentage ?? 0,
-          summary: raw.summary ?? raw.feedback ?? raw.analysis ?? "",
-          strengths: raw.strengths ?? raw.pros ?? [],
-          weaknesses: raw.weaknesses ?? raw.cons ?? raw.improvements ?? [],
-        });
-        if (!candidateUser) {
-          console.warn(
-            "User is not logged in — application will not appear in their portal.",
-          );
-        }
+        await submitApplication(job._id, file);
         try {
-          await submitApplication(job._id, file);
-        } catch (submitErr) {
-          console.warn(
-            "submitApplication failed (user may not be logged in):",
-            submitErr,
+          const scored = await scoreResumeByJob(job._id, file);
+          const raw = unwrapScorePayload(scored);
+          setAiResult({
+            score: raw.score ?? raw.match_score ?? raw.percentage ?? 0,
+            summary: raw.summary ?? raw.feedback ?? raw.analysis ?? "",
+            strengths: raw.strengths ?? raw.pros ?? [],
+            weaknesses: raw.weaknesses ?? raw.cons ?? raw.improvements ?? [],
+          });
+        } catch (scoreErr) {
+          console.warn("Resume scoring failed after submission:", scoreErr);
+          setAiError(
+            "Application submitted successfully, but AI scoring is temporarily unavailable.",
           );
         }
       } else {
@@ -143,11 +138,11 @@ export default function JobDetail() {
       }
       setSubmitted(true);
     } catch (err) {
-      console.error("AI scoring failed:", err);
+      console.error("Application submit failed:", err);
       setAiError(
-        "Could not connect to the AI service. Please check your connection and try again.",
+        err.message || "Could not submit your application. Please try again.",
       );
-      setSubmitted(true);
+      setSubmitted(false);
     } finally {
       setSubmitting(false);
     }
@@ -621,6 +616,21 @@ export default function JobDetail() {
                       "Submit Application →"
                     )}
                   </button>
+
+                  {aiError && (
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "var(--red)",
+                        background: "var(--red-dim)",
+                        padding: "10px 14px",
+                        borderRadius: 8,
+                        marginTop: 2,
+                      }}
+                    >
+                      {aiError}
+                    </div>
+                  )}
 
                   <p
                     style={{

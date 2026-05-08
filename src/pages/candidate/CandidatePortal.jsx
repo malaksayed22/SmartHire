@@ -36,16 +36,14 @@ export default function CandidatePortal() {
   useEffect(() => {
     (async () => {
       try {
-        const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim() || "/api";
-        const res = await fetch(`${BASE_URL}/candidate/my-applications`, {
-          credentials: "include",
-        });
-        if (!res.ok) throw new Error(`Failed to load applications (${res.status})`);
-        const data = await res.json();
-        setMyApplications(Array.isArray(data) ? data : data.applications || []);
+        const { getCandidateApplications } = await import("../../services/api");
+        const data = await getCandidateApplications();
+        setMyApplications(data);
       } catch (err) {
         console.error("Failed to fetch applications:", err);
-        setAppsError("Could not load your applications. Please try refreshing.");
+        setAppsError(
+          "Could not load your applications. Please try refreshing.",
+        );
       } finally {
         setLoadingApps(false);
       }
@@ -201,13 +199,19 @@ export default function CandidatePortal() {
             {
               label: "Avg AI Score",
               value: myApplications.length
-                ? Math.round(myApplications.reduce((a, c) => a + (c.score || 0), 0) / myApplications.length)
+                ? Math.round(
+                    myApplications.reduce((a, c) => a + (c.score || 0), 0) /
+                      myApplications.length,
+                  )
                 : 0,
               color: "#1ECFAA",
             },
             {
               label: "Emails Received",
-              value: myApplications.reduce((a, c) => a + (c.emails?.length || 0), 0),
+              value: myApplications.reduce(
+                (a, c) => a + (c.emails?.length || 0),
+                0,
+              ),
               color: "#8B70F5",
             },
           ].map((s, i) => (
@@ -269,338 +273,375 @@ export default function CandidatePortal() {
           Your Applications
         </div>
         {loadingApps ? (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--m2)", fontSize: 14 }}>
+          <div
+            style={{
+              textAlign: "center",
+              padding: "60px 0",
+              color: "var(--m2)",
+              fontSize: 14,
+            }}
+          >
             Loading your applications...
           </div>
         ) : appsError ? (
-          <div style={{
-            padding: "20px 24px",
-            background: "var(--red-dim)",
-            border: "1px solid rgba(240,80,104,0.2)",
-            borderRadius: 10,
-            fontSize: 14,
-            color: "var(--m1)",
-          }}>
+          <div
+            style={{
+              padding: "20px 24px",
+              background: "var(--red-dim)",
+              border: "1px solid rgba(240,80,104,0.2)",
+              borderRadius: 10,
+              fontSize: 14,
+              color: "var(--m1)",
+            }}
+          >
             ⚠️ {appsError}
           </div>
         ) : myApplications.length === 0 ? (
-          <div style={{
-            textAlign: "center",
-            padding: "60px 32px",
-            background: "var(--s1)",
-            border: "1px solid var(--b1)",
-            borderRadius: 16,
-          }}>
+          <div
+            style={{
+              textAlign: "center",
+              padding: "60px 32px",
+              background: "var(--s1)",
+              border: "1px solid var(--b1)",
+              borderRadius: 16,
+            }}
+          >
             <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
-            <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+            <div
+              style={{
+                fontFamily: "'Syne', sans-serif",
+                fontSize: 18,
+                fontWeight: 700,
+                marginBottom: 8,
+              }}
+            >
               No applications yet
             </div>
             <p style={{ color: "var(--m1)", fontSize: 14, marginBottom: 20 }}>
-              You haven't applied to any jobs yet. Browse open positions and apply!
+              You haven't applied to any jobs yet. Browse open positions and
+              apply!
             </p>
-            <Link to="/jobs" className="btn btn-primary" style={{ display: "inline-flex" }}>
+            <Link
+              to="/jobs"
+              className="btn btn-primary"
+              style={{ display: "inline-flex" }}
+            >
               Browse Jobs →
             </Link>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {myApplications.map((app) => {
-            const scoreColor =
-              app.score >= 80
-                ? "var(--teal)"
-                : app.score >= 60
-                  ? "var(--amber)"
-                  : "var(--red)";
-            const currentStageIdx = PIPELINE.indexOf(
-              app.status === "rejected" ? "new" : app.status,
-            );
-            const isRejected = app.status === "rejected";
+            {myApplications.map((app) => {
+              const scoreColor =
+                app.score >= 80
+                  ? "var(--teal)"
+                  : app.score >= 60
+                    ? "var(--amber)"
+                    : "var(--red)";
+              const currentStageIdx = PIPELINE.indexOf(
+                app.status === "rejected" ? "new" : app.status,
+              );
+              const isRejected = app.status === "rejected";
 
-            return (
-              <div key={app.id} className="card" style={{ overflow: "hidden" }}>
-                {/* Card header */}
+              return (
                 <div
-                  style={{
-                    padding: "22px 26px",
-                    borderBottom: "1px solid var(--b1)",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    gap: 20,
-                  }}
+                  key={app.id}
+                  className="card"
+                  style={{ overflow: "hidden" }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        fontFamily: "'Syne', sans-serif",
-                        fontSize: 18,
-                        fontWeight: 700,
-                        color: "var(--text)",
-                        marginBottom: 6,
-                      }}
-                    >
-                      {app.appliedRole}
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 14,
-                        fontSize: 13,
-                        color: "var(--m1)",
-                      }}
-                    >
-                      <span>📍 {app.location}</span>
-                      <span>
-                        📅 Applied{" "}
-                        {new Date(app.appliedDate).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "var(--m2)",
-                        marginBottom: 4,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.8px",
-                        fontFamily: "'Syne', sans-serif",
-                      }}
-                    >
-                      AI Score
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 36,
-                        fontWeight: 800,
-                        fontFamily: "'Syne', sans-serif",
-                        color: scoreColor,
-                        lineHeight: 1,
-                      }}
-                    >
-                      {app.score}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--m2)" }}>
-                      / 100
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pipeline timeline */}
-                <div
-                  style={{
-                    padding: "22px 26px",
-                    borderBottom: "1px solid var(--b1)",
-                  }}
-                >
+                  {/* Card header */}
                   <div
                     style={{
-                      fontSize: 11.5,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.8px",
-                      color: "var(--m2)",
-                      fontFamily: "'Syne', sans-serif",
-                      fontWeight: 600,
-                      marginBottom: 18,
+                      padding: "22px 26px",
+                      borderBottom: "1px solid var(--b1)",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: 20,
                     }}
                   >
-                    {isRejected ? "Application Status" : "Your Progress"}
-                  </div>
-
-                  {isRejected ? (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: "14px 16px",
-                        background: "var(--red-dim)",
-                        border: "1px solid rgba(240,80,104,0.2)",
-                        borderRadius: 10,
-                      }}
-                    >
-                      <span style={{ fontSize: 20 }}>✉️</span>
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 500,
-                            color: "var(--text)",
-                            marginBottom: 3,
-                          }}
-                        >
-                          Application not progressing
-                        </div>
-                        <div style={{ fontSize: 13, color: "var(--m1)" }}>
-                          Thank you for applying. We'll keep your profile on
-                          file for future opportunities.
-                        </div>
+                    <div>
+                      <div
+                        style={{
+                          fontFamily: "'Syne', sans-serif",
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color: "var(--text)",
+                          marginBottom: 6,
+                        }}
+                      >
+                        {app.appliedRole}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 14,
+                          fontSize: 13,
+                          color: "var(--m1)",
+                        }}
+                      >
+                        <span>📍 {app.location}</span>
+                        <span>
+                          📅 Applied{" "}
+                          {new Date(app.appliedDate).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                            },
+                          )}
+                        </span>
                       </div>
                     </div>
-                  ) : (
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--m2)",
+                          marginBottom: 4,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.8px",
+                          fontFamily: "'Syne', sans-serif",
+                        }}
+                      >
+                        AI Score
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 36,
+                          fontWeight: 800,
+                          fontFamily: "'Syne', sans-serif",
+                          color: scoreColor,
+                          lineHeight: 1,
+                        }}
+                      >
+                        {app.score}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--m2)" }}>
+                        / 100
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pipeline timeline */}
+                  <div
+                    style={{
+                      padding: "22px 26px",
+                      borderBottom: "1px solid var(--b1)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.8px",
+                        color: "var(--m2)",
+                        fontFamily: "'Syne', sans-serif",
+                        fontWeight: 600,
+                        marginBottom: 18,
+                      }}
+                    >
+                      {isRejected ? "Application Status" : "Your Progress"}
+                    </div>
+
+                    {isRejected ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "14px 16px",
+                          background: "var(--red-dim)",
+                          border: "1px solid rgba(240,80,104,0.2)",
+                          borderRadius: 10,
+                        }}
+                      >
+                        <span style={{ fontSize: 20 }}>✉️</span>
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 500,
+                              color: "var(--text)",
+                              marginBottom: 3,
+                            }}
+                          >
+                            Application not progressing
+                          </div>
+                          <div style={{ fontSize: 13, color: "var(--m1)" }}>
+                            Thank you for applying. We'll keep your profile on
+                            file for future opportunities.
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        {PIPELINE.map((stage, i) => {
+                          const done = i <= currentStageIdx;
+                          const active = i === currentStageIdx;
+                          const lineIsFilled = i <= currentStageIdx;
+                          return (
+                            <React.Fragment key={stage}>
+                              {i > 0 && (
+                                <div
+                                  style={{
+                                    flex: 1,
+                                    height: 2,
+                                    marginTop: 17,
+                                    background: lineIsFilled
+                                      ? "var(--grad)"
+                                      : "var(--b1)",
+                                    transition: "background 0.3s",
+                                  }}
+                                />
+                              )}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  gap: 8,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: "50%",
+                                    background: done
+                                      ? active
+                                        ? "var(--blue)"
+                                        : "var(--blue-dim)"
+                                      : "var(--s2)",
+                                    border: `2px solid ${done ? "var(--blue)" : "var(--b2)"}`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: done ? 14 : 12,
+                                    transition: "all 0.3s",
+                                    boxShadow: active
+                                      ? "0 0 16px rgba(91,142,248,0.4)"
+                                      : "none",
+                                  }}
+                                >
+                                  {done ? (
+                                    active ? (
+                                      STAGE_ICONS[stage]
+                                    ) : (
+                                      "✓"
+                                    )
+                                  ) : (
+                                    <span
+                                      style={{
+                                        color: "var(--m3)",
+                                        fontSize: 11,
+                                      }}
+                                    >
+                                      {i + 1}
+                                    </span>
+                                  )}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 11.5,
+                                    fontWeight: active ? 600 : 400,
+                                    color: done
+                                      ? active
+                                        ? "var(--text)"
+                                        : "var(--m1)"
+                                      : "var(--m3)",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {PIPELINE_LABELS[stage]}
+                                </div>
+                              </div>
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Email History */}
+                  <div style={{ padding: "20px 26px" }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.8px",
+                        color: "var(--m2)",
+                        fontFamily: "'Syne', sans-serif",
+                        fontWeight: 600,
+                        marginBottom: 14,
+                      }}
+                    >
+                      Emails received ({app.emails.length})
+                    </div>
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "flex-start",
+                        flexDirection: "column",
+                        gap: 8,
                       }}
                     >
-                      {PIPELINE.map((stage, i) => {
-                        const done = i <= currentStageIdx;
-                        const active = i === currentStageIdx;
-                        const lineIsFilled = i <= currentStageIdx;
+                      {app.emails.map((email, i) => {
+                        const meta =
+                          EMAIL_TYPE_META[email.type] ||
+                          EMAIL_TYPE_META.confirmation;
                         return (
-                          <React.Fragment key={stage}>
-                            {i > 0 && (
+                          <div
+                            key={i}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 12,
+                              padding: "10px 14px",
+                              background: "var(--s2)",
+                              border: "1px solid var(--b1)",
+                              borderRadius: 8,
+                            }}
+                          >
+                            <span style={{ fontSize: 18 }}>{meta.icon}</span>
+                            <div style={{ flex: 1 }}>
                               <div
                                 style={{
-                                  flex: 1,
-                                  height: 2,
-                                  marginTop: 17,
-                                  background: lineIsFilled
-                                    ? "var(--grad)"
-                                    : "var(--b1)",
-                                  transition: "background 0.3s",
-                                }}
-                              />
-                            )}
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                gap: 8,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: "50%",
-                                  background: done
-                                    ? active
-                                      ? "var(--blue)"
-                                      : "var(--blue-dim)"
-                                    : "var(--s2)",
-                                  border: `2px solid ${done ? "var(--blue)" : "var(--b2)"}`,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: done ? 14 : 12,
-                                  transition: "all 0.3s",
-                                  boxShadow: active
-                                    ? "0 0 16px rgba(91,142,248,0.4)"
-                                    : "none",
+                                  fontSize: 13.5,
+                                  fontWeight: 500,
+                                  color: "var(--text)",
                                 }}
                               >
-                                {done ? (
-                                  active ? (
-                                    STAGE_ICONS[stage]
-                                  ) : (
-                                    "✓"
-                                  )
-                                ) : (
-                                  <span
-                                    style={{ color: "var(--m3)", fontSize: 11 }}
-                                  >
-                                    {i + 1}
-                                  </span>
-                                )}
+                                {email.subject}
                               </div>
                               <div
                                 style={{
-                                  fontSize: 11.5,
-                                  fontWeight: active ? 600 : 400,
-                                  color: done
-                                    ? active
-                                      ? "var(--text)"
-                                      : "var(--m1)"
-                                    : "var(--m3)",
-                                  textAlign: "center",
+                                  fontSize: 12,
+                                  color: "var(--m2)",
+                                  marginTop: 2,
                                 }}
                               >
-                                {PIPELINE_LABELS[stage]}
+                                Sent {email.sent} · Via n8n automation
                               </div>
                             </div>
-                          </React.Fragment>
+                            <span
+                              className={`pill pill-${meta.color}`}
+                              style={{ fontSize: 10.5 }}
+                            >
+                              {meta.label}
+                            </span>
+                          </div>
                         );
                       })}
                     </div>
-                  )}
-                </div>
-
-                {/* Email History */}
-                <div style={{ padding: "20px 26px" }}>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.8px",
-                      color: "var(--m2)",
-                      fontFamily: "'Syne', sans-serif",
-                      fontWeight: 600,
-                      marginBottom: 14,
-                    }}
-                  >
-                    Emails received ({app.emails.length})
-                  </div>
-                  <div
-                    style={{ display: "flex", flexDirection: "column", gap: 8 }}
-                  >
-                    {app.emails.map((email, i) => {
-                      const meta =
-                        EMAIL_TYPE_META[email.type] ||
-                        EMAIL_TYPE_META.confirmation;
-                      return (
-                        <div
-                          key={i}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            padding: "10px 14px",
-                            background: "var(--s2)",
-                            border: "1px solid var(--b1)",
-                            borderRadius: 8,
-                          }}
-                        >
-                          <span style={{ fontSize: 18 }}>{meta.icon}</span>
-                          <div style={{ flex: 1 }}>
-                            <div
-                              style={{
-                                fontSize: 13.5,
-                                fontWeight: 500,
-                                color: "var(--text)",
-                              }}
-                            >
-                              {email.subject}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                color: "var(--m2)",
-                                marginTop: 2,
-                              }}
-                            >
-                              Sent {email.sent} · Via n8n automation
-                            </div>
-                          </div>
-                          <span
-                            className={`pill pill-${meta.color}`}
-                            style={{ fontSize: 10.5 }}
-                          >
-                            {meta.label}
-                          </span>
-                        </div>
-                      );
-                    })}
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
           </div>
         )}
 

@@ -10,7 +10,8 @@ export default function CandidateLogin() {
   const { loginCandidate } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = new URLSearchParams(location.search).get("redirect") || "/candidate/portal";
+  const redirectTo =
+    new URLSearchParams(location.search).get("redirect") || "/candidate/portal";
 
   const handleLogin = async () => {
     if (!email || !password) {

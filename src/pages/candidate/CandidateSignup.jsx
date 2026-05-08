@@ -13,7 +13,8 @@ export default function CandidateSignup() {
   const { signupCandidate } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = new URLSearchParams(location.search).get("redirect") || "/candidate/portal";
+  const redirectTo =
+    new URLSearchParams(location.search).get("redirect") || "/candidate/portal";
 
   const handleSignup = async () => {
     if (!name || !email || !phone || !password || !confirm) {

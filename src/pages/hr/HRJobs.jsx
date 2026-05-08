@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import HRSidebar from "../../components/HRSidebar";
 import { DeptTag, Toast } from "../../components/UI";
+import { canonicalPostId } from "../../services/hrApplicants";
 
 export default function HRJobs() {
   const [showModal, setShowModal] = useState(false);
@@ -486,7 +487,7 @@ export default function HRJobs() {
                       View
                     </Link>
                     <Link
-                      to="/hr/candidates"
+                      to={`/hr/candidates?post=${encodeURIComponent(canonicalPostId(job._id || job.id))}`}
                       className="btn btn-primary btn-sm"
                       style={{ fontSize: 12 }}
                     >

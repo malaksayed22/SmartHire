@@ -8,6 +8,15 @@ export function parseRankList(data) {
   return data?.ranked || data?.candidates || data?.data || data?.results || [];
 }
 
+/** Normalize post/job id for comparisons (strings, trimming, Mongo extended JSON) */
+export function canonicalPostId(v) {
+  if (v == null || v === "") return "";
+  if (typeof v === "object" && v !== null && "$oid" in v) {
+    return String(v.$oid).trim();
+  }
+  return String(v).trim();
+}
+
 export function normalizeStatus(raw) {
   if (raw == null || raw === "") return "new";
   const s = String(raw).toLowerCase().trim().replace(/[\s-]+/g, "_");
@@ -87,9 +96,18 @@ export function normalizeRankRow(row, jobTitle, postId) {
       row.hiring_stage ??
       row.state,
   );
+  const resolvedPostId =
+    row.post_id ??
+    row.postId ??
+    row.job_id ??
+    row.jobId ??
+    row.position_id ??
+    postId;
+
   const uid =
-    row._id ?? row.application_id ?? row.id ?? `${postId}:${email || name}`;
-  const id = String(uid);
+    row._id ?? row.application_id ?? row.id ?? `${email || name}`;
+  const postKey = canonicalPostId(resolvedPostId);
+  const id = `${postKey}--${String(uid)}`;
   const location = row.location || row.city || "—";
   const appliedRole =
     jobTitle || row.job_title || row.post_title || row.title || "—";
@@ -127,7 +145,7 @@ export function normalizeRankRow(row, jobTitle, postId) {
     avatarColor: avatarColorFromName(name),
     experience,
     skills: toSkillsArray(row.skills),
-    postId: String(postId),
+    postId: canonicalPostId(resolvedPostId),
     jobTitle: appliedRole,
     summary:
       row.summary || row.bio || row.profile_summary || row.about || "",
@@ -175,10 +193,10 @@ export async function fetchHRJobsAndRankedApplicants(maxPosts = 24) {
   toRank.forEach((job, i) => {
     const pid = job._id || job.id;
     if (!pid) return;
-    countByPost.set(String(pid), rankedLists[i].length);
+    countByPost.set(canonicalPostId(pid), rankedLists[i].length);
   });
   const jobsWithCounts = jobs.map((job) => {
-    const pid = String(job._id || job.id);
+    const pid = canonicalPostId(job._id || job.id);
     const fromRank = countByPost.get(pid);
     const apiN = Number(job.applicants) || 0;
     if (fromRank != null && fromRank > 0) {
@@ -213,16 +231,16 @@ export async function mergeApplicantCountsFromRanking(jobs, maxPosts = 24) {
       try {
         const data = await rankCandidatesByPost(pid);
         const n = parseRankList(data).length;
-        return [String(pid), n];
+        return [canonicalPostId(pid), n];
       } catch {
-        return [String(pid), null];
+        return [canonicalPostId(pid), null];
       }
     }),
   );
   const byPost = new Map(pairs.filter(([id]) => id).map(([id, n]) => [id, n]));
 
   return jobs.map((job) => {
-    const pid = String(job._id || job.id);
+    const pid = canonicalPostId(job._id || job.id);
     const rankedN = byPost.get(pid);
     const apiN = Number(job.applicants) || 0;
     if (rankedN != null && rankedN > 0) {

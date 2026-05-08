@@ -7,6 +7,7 @@ import {
   fetchHRJobsAndRankedApplicants,
   buildWeeklySeries,
   normalizeStatus,
+  canonicalPostId,
 } from "../../services/hrApplicants";
 import {
   BarChart,
@@ -159,7 +160,9 @@ export default function HRDashboard() {
   const jobsWithAvg = useMemo(() => {
     return jobs.map((job) => {
       const pid = job._id || job.id;
-      const jobC = applicants.filter((c) => c.postId === String(pid));
+      const jobC = applicants.filter(
+        (c) => canonicalPostId(c.postId) === canonicalPostId(pid),
+      );
       const avg = jobC.length
         ? Math.round(jobC.reduce((a, c) => a + c.score, 0) / jobC.length)
         : 0;
@@ -354,8 +357,9 @@ export default function HRDashboard() {
                     const color =
                       DEPT_DOT[job.department] || DEPT_DOT.General;
                     return (
-                      <div
+                      <Link
                         key={job._id || job.id}
+                        to={`/hr/candidates?post=${encodeURIComponent(canonicalPostId(job._id || job.id))}`}
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -364,6 +368,8 @@ export default function HRDashboard() {
                           borderRadius: 8,
                           transition: "background 0.15s",
                           cursor: "pointer",
+                          textDecoration: "none",
+                          color: "inherit",
                         }}
                         onMouseEnter={(e) =>
                           (e.currentTarget.style.background = "var(--b1)")
@@ -420,7 +426,7 @@ export default function HRDashboard() {
                             avg score
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     );
                   })}
                 </div>

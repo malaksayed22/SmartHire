@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import HRSidebar from "../../components/HRSidebar";
 import {
   Avatar,
@@ -14,20 +14,34 @@ import {
   parseRankList,
   normalizeRankRow,
   normalizeStatus,
+  canonicalPostId,
 } from "../../services/hrApplicants";
 import { rankCandidatesByPost } from "../../services/api";
 
 export default function HRCandidates() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("score");
   const [ranking, setRanking] = useState(false);
   const [jobPosts, setJobPosts] = useState([]);
   const [applicants, setApplicants] = useState([]);
-  const [selectedPostId, setSelectedPostId] = useState("");
+  const [selectedPostId, setSelectedPostId] = useState(
+    () =>
+      canonicalPostId(
+        searchParams.get("post") || searchParams.get("post_id") || "",
+      ),
+  );
   const [rankResults, setRankResults] = useState(null);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = canonicalPostId(
+      searchParams.get("post") || searchParams.get("post_id") || "",
+    );
+    setSelectedPostId(q);
+  }, [searchParams]);
 
   const loadPipeline = useCallback(async () => {
     setLoading(true);
@@ -81,7 +95,8 @@ export default function HRCandidates() {
           data?.results ||
           [];
       const job = jobPosts.find(
-        (p) => String(p._id || p.id) === String(selectedPostId),
+        (p) =>
+          canonicalPostId(p._id || p.id) === canonicalPostId(selectedPostId),
       );
       const title = job?.title || "";
       const rows = parseRankList(data).map((r) =>
@@ -91,7 +106,8 @@ export default function HRCandidates() {
 
       setApplicants((prev) => {
         const rest = prev.filter(
-          (c) => String(c.postId) !== String(selectedPostId),
+          (c) =>
+            canonicalPostId(c.postId) !== canonicalPostId(selectedPostId),
         );
         const ids = new Set(rest.map((c) => c.id));
         const next = [...rest];
@@ -120,13 +136,16 @@ export default function HRCandidates() {
   };
 
   const selectedJobTitle = selectedPostId
-    ? jobPosts.find((p) => String(p._id || p.id) === String(selectedPostId))
-        ?.title || ""
+    ? jobPosts.find(
+        (p) =>
+          canonicalPostId(p._id || p.id) === canonicalPostId(selectedPostId),
+      )?.title || ""
     : "";
 
   const baseList = selectedPostId
     ? applicants.filter(
-        (c) => String(c.postId) === String(selectedPostId),
+        (c) =>
+          canonicalPostId(c.postId) === canonicalPostId(selectedPostId),
       )
     : applicants;
 
@@ -224,7 +243,19 @@ export default function HRCandidates() {
             <select
               className="input"
               value={selectedPostId}
-              onChange={(e) => setSelectedPostId(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSelectedPostId(v);
+                const next = new URLSearchParams(searchParams);
+                if (v) {
+                  next.set("post", v);
+                  next.delete("post_id");
+                } else {
+                  next.delete("post");
+                  next.delete("post_id");
+                }
+                setSearchParams(next, { replace: true });
+              }}
               style={{
                 height: 32,
                 fontSize: 12.5,
@@ -234,7 +265,10 @@ export default function HRCandidates() {
             >
               <option value="">All jobs</option>
               {jobPosts.map((p) => (
-                <option key={p._id || p.id} value={p._id || p.id}>
+                <option
+                  key={canonicalPostId(p._id || p.id)}
+                  value={canonicalPostId(p._id || p.id)}
+                >
                   {p.title}
                 </option>
               ))}

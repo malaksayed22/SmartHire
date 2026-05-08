@@ -6,6 +6,9 @@ import { JOBS } from "../../data/mock";
 import { useAuth } from "../../context/AuthContext";
 import { canonicalPostId } from "../../services/hrApplicants";
 
+/** In production, only API-backed posts exist — no static mock listings. */
+const USE_STATIC_DEMO_JOBS = !import.meta.env.PROD;
+
 /** Backend uses Mongo-style ids; mock jobs use "1","2" — never POST those as post_id. */
 function isLikelyBackendPostId(v) {
   if (v == null) return false;
@@ -20,7 +23,9 @@ export default function JobDetail() {
   const [apiJob, setApiJob] = useState(null);
   const [jobListLoaded, setJobListLoaded] = useState(false);
   const routeId = id != null ? String(id).trim() : "";
-  const mockJob = JOBS.find((j) => j.id === routeId || j.id === id);
+  const mockJob = USE_STATIC_DEMO_JOBS
+    ? JOBS.find((j) => j.id === routeId || j.id === id)
+    : null;
   const job = apiJob || mockJob;
   const [form, setForm] = useState({
     name: "",
@@ -102,7 +107,9 @@ export default function JobDetail() {
           );
         });
 
-        const mock = JOBS.find((j) => j.id === routeId || j.id === id);
+        const mock =
+          USE_STATIC_DEMO_JOBS &&
+          JOBS.find((j) => j.id === routeId || j.id === id);
         if (!found && mock) {
           const normTitle = (s) =>
             (s || "")
@@ -154,7 +161,24 @@ export default function JobDetail() {
     };
   }, [id, routeId, navigate]);
 
-  if (!job)
+  if (!job) {
+    if (import.meta.env.PROD && !jobListLoaded) {
+      return (
+        <div style={{ background: "var(--bg)", minHeight: "100vh" }}>
+          <PublicNav />
+          <div
+            style={{
+              paddingTop: 160,
+              textAlign: "center",
+              color: "var(--m1)",
+              fontSize: 15,
+            }}
+          >
+            Loading job…
+          </div>
+        </div>
+      );
+    }
     return (
       <div style={{ padding: 100, textAlign: "center", color: "var(--m1)" }}>
         Job not found.{" "}
@@ -163,6 +187,7 @@ export default function JobDetail() {
         </Link>
       </div>
     );
+  }
 
   const handleFile = (f) => {
     if (f && (f.type === "application/pdf" || f.name.endsWith(".docx")))

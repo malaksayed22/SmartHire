@@ -7,24 +7,45 @@ import { useAuth } from "../../context/AuthContext";
 
 const TYPES = ["Full-time", "Part-time", "Remote", "Contract"];
 
+/** Production never seeds the board with static demo jobs — only your API posts appear. */
+const INITIAL_JOBS = import.meta.env.PROD ? [] : JOBS;
+
 export default function JobBoard() {
   const navigate = useNavigate();
   const { candidateUser } = useAuth();
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("All");
   const [selectedTypes, setSelectedTypes] = useState([]);
-  const [jobs, setJobs] = useState(JOBS);
+  const [jobs, setJobs] = useState(INITIAL_JOBS);
+  const [jobsLoading, setJobsLoading] = useState(import.meta.env.PROD);
+  const [jobsError, setJobsError] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
+      if (import.meta.env.PROD) {
+        setJobsLoading(true);
+        setJobsError(null);
+      }
       try {
         const { getActiveJobs, normalizeJob } =
           await import("../../services/api");
         const data = await getActiveJobs();
-        // getActiveJobs already normalizes to array; guard against empty
-        if (data.length > 0) setJobs(data.map(normalizeJob));
-      } catch {}
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data.map(normalizeJob) : [];
+        setJobs(list.length > 0 ? list : import.meta.env.PROD ? [] : JOBS);
+      } catch (e) {
+        if (!cancelled) {
+          setJobsError(e?.message || "Could not load jobs");
+          if (import.meta.env.PROD) setJobs([]);
+        }
+      } finally {
+        if (!cancelled && import.meta.env.PROD) setJobsLoading(false);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const DEPTS = useMemo(
@@ -95,8 +116,9 @@ export default function JobBoard() {
             </span>
           </h1>
           <p style={{ color: "var(--m1)", fontSize: 16, fontWeight: 300 }}>
-            {JOBS.length} open positions · AI-assisted matching · Instant
-            application
+            {jobsLoading
+              ? "Loading open positions…"
+              : `${jobs.length} open position${jobs.length === 1 ? "" : "s"} · AI-assisted matching · Instant application`}
           </p>
         </div>
 
@@ -283,31 +305,59 @@ export default function JobBoard() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {filtered.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  candidateUser={candidateUser}
-                  navigate={navigate}
-                />
-              ))}
-              {filtered.length === 0 && (
-                <div style={{ textAlign: "center", padding: "60px 24px" }}>
-                  <div style={{ fontSize: 36, marginBottom: 16 }}>🔍</div>
-                  <div
-                    style={{
-                      fontFamily: "'Syne', sans-serif",
-                      fontWeight: 700,
-                      fontSize: 18,
-                      marginBottom: 8,
-                    }}
-                  >
-                    No positions found
-                  </div>
-                  <div style={{ color: "var(--m1)", fontSize: 14 }}>
-                    Try adjusting your filters or search terms
-                  </div>
+              {jobsError && (
+                <div
+                  style={{
+                    padding: "14px 18px",
+                    borderRadius: 8,
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    color: "#fecaca",
+                    fontSize: 14,
+                  }}
+                >
+                  Could not load jobs from the server: {jobsError}
                 </div>
+              )}
+              {jobsLoading ? (
+                <div
+                  style={{ textAlign: "center", padding: "48px 24px", color: "var(--m1)" }}
+                >
+                  Loading roles from your company…
+                </div>
+              ) : (
+                <>
+                  {filtered.map((job) => (
+                    <JobCard
+                      key={job.id}
+                      job={job}
+                      candidateUser={candidateUser}
+                      navigate={navigate}
+                    />
+                  ))}
+                  {filtered.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "60px 24px" }}>
+                      <div style={{ fontSize: 36, marginBottom: 16 }}>🔍</div>
+                      <div
+                        style={{
+                          fontFamily: "'Syne', sans-serif",
+                          fontWeight: 700,
+                          fontSize: 18,
+                          marginBottom: 8,
+                        }}
+                      >
+                        {jobsError
+                          ? "No jobs loaded"
+                          : "No positions found"}
+                      </div>
+                      <div style={{ color: "var(--m1)", fontSize: 14 }}>
+                        {jobsError
+                          ? "Fix the connection or try again later."
+                          : "Try adjusting your filters or search terms"}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </main>

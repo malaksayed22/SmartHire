@@ -72,40 +72,61 @@ export function setWorkflowEnabled(workflowId, enabled) {
   } catch (_) {}
 }
 
-async function postJson(url, body) {
+/**
+ * POST JSON to n8n webhook. On HTTP success we only drain the body — never parse JSON.
+ * n8n often returns 204/no body or non-JSON; parsing caused "Unexpected end of JSON input".
+ */
+async function postWebhook(url, body) {
+  let payload;
+  try {
+    payload = JSON.stringify(body);
+  } catch (e) {
+    throw new Error(
+      `n8n payload: ${e?.message || "could not serialize body"}`,
+    );
+  }
+
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
+    body: payload,
   });
-  // One read; n8n often returns 200/204 with an empty body (still OK for automation).
-  const text = await res.text().catch(() => "");
+
   if (!res.ok) {
-    throw new Error(text?.slice(0, 200) || `Webhook HTTP ${res.status}`);
+    let text = "";
+    try {
+      text = await res.text();
+    } catch (_) {
+      /* ignore */
+    }
+    throw new Error(
+      (text || "").trim().slice(0, 200) || `Webhook HTTP ${res.status}`,
+    );
   }
-  const trimmed = (text || "").trim();
-  if (!trimmed) return {};
+
   try {
-    return JSON.parse(trimmed);
-  } catch {
-    return {};
+    await res.arrayBuffer();
+  } catch (_) {
+    /* response already accepted; automation side effects ran */
   }
 }
 
-/** Fire-and-forget friendly: tolerate empty bodies & legacy parse quirks after HTTP success. */
-async function postWebhook(url, body) {
+/** Last-resort: some browsers/plugins surface empty-body quirks as SyntaxError. */
+async function sendN8nWebhook(url, body) {
   try {
-    await postJson(url, body);
+    await postWebhook(url, body);
   } catch (err) {
-    const msg = String(err?.message || err);
+    const msg = String(err?.message || err || "");
     if (
       err instanceof SyntaxError ||
-      /unexpected end of json input/i.test(msg)
+      /unexpected end of json|json input|json\.parse|failed to parse json/i.test(
+        msg,
+      )
     ) {
-      console.warn("n8n webhook: ignoring empty/non-JSON success body", err);
-    } else {
-      throw err;
+      console.warn("n8n webhook: treating body/parse issue as ok", err);
+      return;
     }
+    throw err;
   }
 }
 
@@ -129,7 +150,7 @@ export async function notifyCandidateStatusChanged(detail) {
     timestamp: new Date().toISOString(),
     ...detail,
   };
-  await postWebhook(url, body);
+  await sendN8nWebhook(url, body);
   return { ok: true };
 }
 
@@ -148,7 +169,7 @@ export async function notifyApplicationSubmitted(detail) {
     timestamp: new Date().toISOString(),
     ...detail,
   };
-  await postWebhook(url, body);
+  await sendN8nWebhook(url, body);
   return { ok: true };
 }
 
@@ -198,6 +219,6 @@ export async function notifyN8nTest(workflowId, extra = {}) {
     ...extra,
   };
 
-  await postWebhook(url, body);
+  await sendN8nWebhook(url, body);
   return { ok: true };
 }

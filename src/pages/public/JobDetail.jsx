@@ -101,6 +101,22 @@ export default function JobDetail() {
           await import("../../services/api");
         await submitApplication(job._id, file);
         try {
+          const { notifyApplicationSubmitted } = await import(
+            "../../services/n8nAutomation"
+          );
+          await notifyApplicationSubmitted({
+            candidateName: form.name,
+            candidateEmail: form.email,
+            candidatePhone: form.phone,
+            linkedin: form.linkedin,
+            coverLetter: form.cover,
+            postId: job._id,
+            jobTitle: job.title,
+          });
+        } catch (n8nErr) {
+          console.warn("n8n application webhook:", n8nErr);
+        }
+        try {
           const scored = await scoreResumeByJob(job._id, file);
           const raw = unwrapScorePayload(scored);
           setAiResult({

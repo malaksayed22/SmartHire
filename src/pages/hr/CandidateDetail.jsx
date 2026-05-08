@@ -10,6 +10,7 @@ import {
   getApplicantPipelineMetaMap,
   pickApplicationRecordId,
 } from "../../services/hrApplicants";
+import { notifyCandidateStatusChanged } from "../../services/n8nAutomation";
 
 export default function CandidateDetail() {
   const { id } = useParams();
@@ -152,9 +153,31 @@ export default function CandidateDetail() {
     } catch (_) {
       /* optional server route — local + list meta already updated */
     }
+
+    let n8nHint = "";
+    try {
+      const n8n = await notifyCandidateStatusChanged({
+        status: canon,
+        statusLabel: STATUS_LABELS[canon] || canon,
+        candidateName: candidate.name,
+        candidateEmail: candidate.email,
+        candidatePhone: candidate.phone || base?.phone || "",
+        applicationId: pickApplicationRecordId(base) || "",
+        postId: base?.postId || "",
+        jobTitle: candidate.appliedRole,
+        hrPortalApplicantId: id,
+      });
+      if (n8n.ok) n8nHint = " · n8n notified";
+      else if (n8n.reason === "workflow_disabled")
+        n8nHint = " · automation paused (Automations)";
+    } catch (err) {
+      console.warn("n8n webhook:", err);
+      n8nHint = ` · n8n error: ${(err.message || "").slice(0, 48)}`;
+    }
+
     setToast({
-      message: `Status saved · ${STATUS_LABELS[canon] || canon}`,
-      type: "success",
+      message: `Status saved · ${STATUS_LABELS[canon] || canon}${n8nHint}`,
+      type: n8nHint.includes("n8n error") ? "error" : "success",
     });
     setTimeout(() => setToast(null), 3000);
   };
